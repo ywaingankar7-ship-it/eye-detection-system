@@ -24,7 +24,7 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Users, label: "Customers", path: "/customers" },
   { icon: FileText, label: "Prescriptions", path: "/prescriptions" },
   { icon: Package, label: "Inventory", path: "/inventory" },
@@ -44,7 +44,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
       return item.path !== '/analytics' && item.path !== '/ai-test';
     } else {
       // Patient role
-      return ['/', '/appointments', '/ai-test', '/inventory', '/try-on'].includes(item.path);
+      return ['/dashboard', '/appointments', '/ai-test', '/inventory', '/try-on'].includes(item.path);
     }
   });
 
@@ -55,7 +55,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
       className="h-screen glass border-r border-white/10 flex flex-col fixed left-0 top-0 z-50 overflow-hidden"
     >
       <div className="p-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 overflow-hidden">
+        <Link to="/" className="flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20 flex-shrink-0">
             <Eye className="text-white w-6 h-6" />
           </div>
@@ -72,7 +72,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </Link>
         
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}

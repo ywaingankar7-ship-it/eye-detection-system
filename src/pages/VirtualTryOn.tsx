@@ -15,12 +15,14 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  Box
+  Box,
+  X
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { InventoryItem } from "../types";
 import { cn } from "../lib/utils";
-import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { FaceLandmarker } from "@mediapipe/tasks-vision";
+import { getFaceLandmarker } from "../utils/mediaPipe";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF, PerspectiveCamera, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
@@ -47,31 +49,32 @@ function GlassesModel({ url, arDataRef, manualOffset, baseScale = 1.0 }: { url: 
         // Note: We don't invert X here because the parent group is mirrored
         groupRef.current.position.set(
           position.x + (manualOffset.x / 10), 
-          position.y - (manualOffset.y / 10), 
+          position.y - (manualOffset.y / 10) - 0.3, // Adjusted down slightly for better fit
           position.z + 5
         );
         
         groupRef.current.quaternion.copy(quaternion);
         
-        const finalScale = 0.1 * manualOffset.scale * baseScale; 
+        const finalScale = 0.085 * manualOffset.scale * baseScale; // Slightly smaller default
         groupRef.current.scale.set(finalScale, finalScale, finalScale);
       } else {
         // Fallback positioning
         const x = ((arDataRef.current.x + manualOffset.x) / 100 - 0.5) * 10;
         const y = -((arDataRef.current.y + manualOffset.y) / 100 - 0.5) * 7.5;
         groupRef.current.position.set(x, y, 5);
-        groupRef.current.scale.setScalar(arDataRef.current.scale * manualOffset.scale * 0.1 * baseScale);
+        groupRef.current.scale.setScalar(arDataRef.current.scale * manualOffset.scale * 0.085 * baseScale);
         groupRef.current.rotation.z = THREE.MathUtils.degToRad(arDataRef.current.rotation);
       }
     }
   });
 
   return (
-    <primitive 
-      ref={groupRef} 
-      object={scene} 
-      visible={arDataRef.current?.visible || false}
-    />
+    <group ref={groupRef} visible={arDataRef.current?.visible || false}>
+      <primitive 
+        object={scene} 
+        rotation={[0, Math.PI, 0]} 
+      />
+    </group>
   );
 }
 
@@ -114,6 +117,13 @@ export default function VirtualTryOn() {
   // Manual adjustments (offsets)
   const [manualOffset, setManualOffset] = useState({ x: 0, y: 0, scale: 1 });
 
+  const stopVto = () => {
+    setVtoActive(false);
+    setIsCameraReady(false);
+    setArState({ visible: false, x: 0, y: 0, scale: 1, rotation: 0 });
+    arDataRef.current = { x: 0, y: 0, scale: 1, rotation: 0, visible: false, matrix: null };
+  };
+
   const webcamRef = useRef<Webcam>(null);
   const requestRef = useRef<number>(undefined);
   const lastUpdateRef = useRef<number>(0);
@@ -121,26 +131,8 @@ export default function VirtualTryOn() {
 
   useEffect(() => {
     const initFaceLandmarker = async () => {
-      try {
-        // Use specific version to match package.json and avoid mismatches
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
-        );
-        const landmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-            delegate: "GPU"
-          },
-          outputFaceBlendshapes: true,
-          outputFacialTransformationMatrixes: true,
-          runningMode: "VIDEO",
-          numFaces: 1
-        });
-        setFaceLandmarker(landmarker);
-        console.log("FaceLandmarker initialized successfully. Note: 'INFO: Created TensorFlow Lite XNNPACK delegate for CPU' is a normal informational message indicating successful CPU acceleration fallback.");
-      } catch (err) {
-        console.error("Failed to initialize FaceLandmarker:", err);
-      }
+      const landmarker = await getFaceLandmarker();
+      if (landmarker) setFaceLandmarker(landmarker);
     };
 
     const fetchFrames = async () => {
@@ -262,6 +254,14 @@ export default function VirtualTryOn() {
           <p className="text-slate-500">Experience our collection in real-time using AI-assisted AR.</p>
         </div>
         <div className="flex items-center gap-3">
+          {vtoActive && (
+            <button 
+              onClick={stopVto}
+              className="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-rose-500/20 transition-all"
+            >
+              <RefreshCw className="w-4 h-4" /> Stop VTO
+            </button>
+          )}
           <div className={cn(
             "px-4 py-2 rounded-xl border text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all",
             arState.visible 
@@ -344,6 +344,16 @@ export default function VirtualTryOn() {
                 imageSmoothing={true}
                 screenshotQuality={1}
               />
+            )}
+
+            {vtoActive && isCameraReady && (
+              <button 
+                onClick={stopVto}
+                className="absolute top-4 right-4 z-50 p-2 rounded-full bg-rose-500/80 text-white hover:bg-rose-600 transition-all shadow-lg pointer-events-auto"
+                title="Stop Camera"
+              >
+                <X className="w-5 h-5" />
+              </button>
             )}
 
             {/* AR Overlay (2D or 3D) */}

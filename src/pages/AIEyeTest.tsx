@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, Eye, Activity, CheckCircle2, AlertCircle, Download, Loader2, Scan, Monitor, Ruler } from "lucide-react";
+import { Upload, Eye, Activity, CheckCircle2, AlertCircle, Download, Loader2, Scan, Monitor, Ruler, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 import SnellenChart from "../components/SnellenChart";
@@ -74,6 +74,15 @@ export default function AIEyeTest() {
     }
   };
 
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
   const handleQuickScan = async (selectedFile: File) => {
     if (mode !== "ai") return;
     setIsQuickScanning(true);
@@ -137,15 +146,6 @@ export default function AIEyeTest() {
         stopCamera();
       }
     }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-      tracks.forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraOpen(false);
   };
 
   const dataURLtoBlob = (dataurl: string) => {
@@ -588,6 +588,15 @@ export default function AIEyeTest() {
                   <div className="relative">
                     <video ref={videoRef} autoPlay playsInline className="w-full rounded-xl shadow-2xl" />
                     <canvas ref={canvasRef} className="hidden" />
+                    <div className="absolute top-4 right-4 z-10">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); stopCamera(); }}
+                        className="p-2 bg-rose-500/80 text-white rounded-full hover:bg-rose-600 transition-all shadow-lg"
+                        title="Close Camera"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4">
                       <button 
                         onClick={(e) => { e.stopPropagation(); captureImage(); }}
@@ -698,8 +707,11 @@ export default function AIEyeTest() {
                   <Ruler className="w-3 h-3 text-slate-500" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Distance:</span>
                   <select 
-                    value={distance}
-                    onChange={(e) => setDistance(parseInt(e.target.value))}
+                    value={isNaN(distance) ? 20 : distance}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setDistance(isNaN(val) ? 20 : val);
+                    }}
                     className="bg-transparent text-xs font-bold focus:outline-none"
                   >
                     <option value={20}>20 ft (Standard)</option>

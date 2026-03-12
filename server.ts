@@ -178,33 +178,13 @@ if (!patientUser) {
 }
 
 // Seed Inventory if empty
-const invCount = db.prepare("SELECT COUNT(*) as count FROM inventory").get() as any;
-if (invCount.count === 0) {
-  const items = [
-    // Frames
-    { type: 'frame', brand: 'Ray-Ban', model: 'Aviator Classic', price: 150, stock: 12, image_url: 'https://picsum.photos/seed/rayban/300/200', details: { color: 'Gold', material: 'Metal', shape: 'Aviator' } },
-    { type: 'frame', brand: 'Oakley', model: 'Holbrook', price: 130, stock: 8, image_url: 'https://picsum.photos/seed/oakley/300/200', details: { color: 'Matte Black', material: 'O Matter', shape: 'Square' } },
-    { type: 'frame', brand: 'Persol', model: 'PO3092V', price: 210, stock: 5, image_url: 'https://picsum.photos/seed/persol/300/200', details: { color: 'Havana', material: 'Acetate', shape: 'Round' } },
-    { type: 'frame', brand: 'Tom Ford', model: 'FT5401', price: 350, stock: 3, image_url: 'https://picsum.photos/seed/tomford/300/200', details: { color: 'Black', material: 'Acetate', shape: 'Cat Eye' } },
-    { type: 'frame', brand: 'Warby Parker', model: 'Haskell', price: 95, stock: 15, image_url: 'https://picsum.photos/seed/warby/300/200', details: { color: 'Crystal', material: 'Acetate', shape: 'Round' } },
-    
-    // Sunglasses
-    { type: 'sunglasses', brand: 'Prada', model: 'Linear Rossa', price: 280, stock: 4, image_url: 'https://picsum.photos/seed/prada/300/200', details: { color: 'Grey', material: 'Acetate', shape: 'Rectangle' } },
-    { type: 'sunglasses', brand: 'Gucci', model: 'GG0006O', price: 320, stock: 6, image_url: 'https://picsum.photos/seed/gucci/300/200', details: { color: 'Black', material: 'Acetate', shape: 'Square' } },
-    { type: 'sunglasses', brand: 'Maui Jim', model: 'Peahi', price: 250, stock: 7, image_url: 'https://picsum.photos/seed/mauijim/300/200', details: { color: 'Tortoise', material: 'Grilamid', shape: 'Wrap' } },
-    { type: 'sunglasses', brand: 'Ray-Ban', model: 'Wayfarer', price: 160, stock: 10, image_url: 'https://picsum.photos/seed/wayfarer/300/200', details: { color: 'Black', material: 'Acetate', shape: 'Square' } },
-    
-    // Lenses
-    { type: 'lens', brand: 'Essilor', model: 'Crizal Sapphire', price: 85, stock: 25, image_url: 'https://picsum.photos/seed/essilor/300/200', details: { coating: 'Anti-reflective', index: 1.6 } },
-    { type: 'lens', brand: 'Zeiss', model: 'BlueGuard', price: 95, stock: 15, image_url: 'https://picsum.photos/seed/zeiss/300/200', details: { coating: 'Blue light filter', index: 1.67 } },
-    { type: 'lens', brand: 'Hoya', model: 'iD MyStyle V+', price: 200, stock: 10, image_url: 'https://picsum.photos/seed/hoya/300/200', details: { coating: 'Premium Progressive', index: 1.74 } },
-    
-    // Accessories
-    { type: 'accessory', brand: 'VisionX', model: 'Premium Case', price: 25, stock: 50, image_url: 'https://picsum.photos/seed/case/300/200', details: { color: 'Black', material: 'Leather' } },
-    { type: 'accessory', brand: 'VisionX', model: 'Cleaning Kit', price: 15, stock: 100, image_url: 'https://picsum.photos/seed/clean/300/200', details: { includes: 'Spray, Cloth, Screwdriver' } },
-  ];
-  const stmt = db.prepare("INSERT INTO inventory (type, brand, model, price, stock, image_url, details) VALUES (?, ?, ?, ?, ?, ?, ?)");
-  items.forEach(item => stmt.run(item.type, item.brand, item.model, item.price, item.stock, item.image_url, JSON.stringify(item.details)));
+// Removed pre-stored items as per user request. 
+// Only items added via the admin interface will be stored.
+const markerFile = path.join(__dirname, ".inventory_cleared");
+if (!fs.existsSync(markerFile)) {
+  db.prepare("DELETE FROM inventory").run();
+  fs.writeFileSync(markerFile, "true");
+  console.log("[SERVER] Pre-stored inventory items cleared.");
 }
 
 // Seed Customers if empty

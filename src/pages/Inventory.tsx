@@ -21,7 +21,8 @@ import { InventoryItem } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF, PerspectiveCamera, Environment, ContactShadows } from "@react-three/drei";
-import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { FaceLandmarker } from "@mediapipe/tasks-vision";
+import { getFaceLandmarker } from "../utils/mediaPipe";
 import * as THREE from "three";
 
 function Glasses3DPreview({ url, arDataRef }: { url: string, arDataRef?: React.RefObject<any> }) {
@@ -37,14 +38,23 @@ function Glasses3DPreview({ url, arDataRef }: { url: string, arDataRef?: React.R
         const scale = new THREE.Vector3();
         matrix.decompose(position, quaternion, scale);
 
-        groupRef.current.position.set(position.x, position.y, position.z + 5);
+        groupRef.current.position.set(position.x, position.y - 0.3, position.z + 5);
         groupRef.current.quaternion.copy(quaternion);
-        groupRef.current.scale.setScalar(0.1);
+        groupRef.current.scale.setScalar(0.085);
       }
     }
   });
 
-  return <primitive ref={groupRef} object={scene} scale={2} position={[0, 0, 0]} />;
+  return (
+    <group ref={groupRef} visible={arDataRef?.current?.visible || false}>
+      <primitive 
+        object={scene} 
+        rotation={[0, Math.PI, 0]} 
+        scale={2} 
+        position={[0, 0, 0]} 
+      />
+    </group>
+  );
 }
 
 export default function Inventory() {
@@ -113,26 +123,13 @@ export default function Inventory() {
 
   useEffect(() => {
     const initFaceLandmarker = async () => {
-      try {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
-        );
-        const landmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-            delegate: "GPU"
-          },
-          outputFacialTransformationMatrixes: true,
-          runningMode: "VIDEO",
-          numFaces: 1
-        });
-        setFaceLandmarker(landmarker);
-      } catch (err) {
-        console.error("Failed to initialize FaceLandmarker in Inventory:", err);
-      }
+      const landmarker = await getFaceLandmarker();
+      if (landmarker) setFaceLandmarker(landmarker);
     };
-    initFaceLandmarker();
-  }, []);
+    if (vtoActive) {
+      initFaceLandmarker();
+    }
+  }, [vtoActive]);
 
   const detectFace = () => {
     if (faceLandmarker && videoRef.current && videoRef.current.readyState === 4) {
@@ -633,8 +630,11 @@ export default function Inventory() {
                     <input 
                       type="number"
                       required
-                      value={newItem.price}
-                      onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) })}
+                      value={isNaN(newItem.price) ? '' : newItem.price}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setNewItem({ ...newItem, price: isNaN(val) ? 0 : val });
+                      }}
                       className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                     />
                   </div>
@@ -643,8 +643,11 @@ export default function Inventory() {
                     <input 
                       type="number"
                       required
-                      value={newItem.stock}
-                      onChange={(e) => setNewItem({ ...newItem, stock: parseInt(e.target.value) })}
+                      value={isNaN(newItem.stock) ? '' : newItem.stock}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setNewItem({ ...newItem, stock: isNaN(val) ? 0 : val });
+                      }}
                       className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                     />
                   </div>
@@ -654,8 +657,11 @@ export default function Inventory() {
                   <input 
                     type="number"
                     step="0.01"
-                    value={newItem.base_scale}
-                    onChange={(e) => setNewItem({ ...newItem, base_scale: parseFloat(e.target.value) })}
+                    value={isNaN(newItem.base_scale) ? '' : newItem.base_scale}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setNewItem({ ...newItem, base_scale: isNaN(val) ? 1.0 : val });
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                     placeholder="1.0"
                   />

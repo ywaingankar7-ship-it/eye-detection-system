@@ -1,17 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { User } from "./types";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Customers from "./pages/Customers";
-import Inventory from "./pages/Inventory";
 import Appointments from "./pages/Appointments";
-import AIEyeTest from "./pages/AIEyeTest";
-import Analytics from "./pages/Analytics";
 import PatientPortal from "./pages/PatientPortal";
 import Prescriptions from "./pages/Prescriptions";
-import VirtualTryOn from "./pages/VirtualTryOn";
+
+// Lazy load heavy components
+const Inventory = lazy(() => import("./pages/Inventory"));
+const AIEyeTest = lazy(() => import("./pages/AIEyeTest"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const VirtualTryOn = lazy(() => import("./pages/VirtualTryOn"));
+
+const LoadingFallback = () => (
+  <div className="min-h-[400px] flex flex-col items-center justify-center gap-4 text-cyan-400">
+    <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+    <p className="text-xs font-bold uppercase tracking-widest animate-pulse">Loading module...</p>
+  </div>
+);
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -56,13 +66,15 @@ export default function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Landing user={user} />} />
+        
         <Route 
           path="/login" 
-          element={user ? <Navigate to="/" /> : <Login onLogin={handleLogin} />} 
+          element={user ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />} 
         />
         
         <Route element={user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />}>
-          <Route path="/" element={user?.role === 'patient' ? <PatientPortal /> : <Dashboard />} />
+          <Route path="/dashboard" element={user?.role === 'patient' ? <PatientPortal /> : <Dashboard />} />
           {(user?.role === 'admin' || user?.role === 'staff') && (
             <>
               <Route path="/customers" element={<Customers />} />
@@ -70,12 +82,28 @@ export default function App() {
             </>
           )}
           {user?.role === 'admin' && (
-            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/analytics" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <Analytics />
+              </Suspense>
+            } />
           )}
-          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/inventory" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Inventory />
+            </Suspense>
+          } />
           <Route path="/appointments" element={<Appointments />} />
-          <Route path="/ai-test" element={<AIEyeTest />} />
-          <Route path="/try-on" element={<VirtualTryOn />} />
+          <Route path="/ai-test" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <AIEyeTest />
+            </Suspense>
+          } />
+          <Route path="/try-on" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <VirtualTryOn />
+            </Suspense>
+          } />
           {user?.role === 'patient' && (
             <Route path="/portal" element={<PatientPortal />} />
           )}
