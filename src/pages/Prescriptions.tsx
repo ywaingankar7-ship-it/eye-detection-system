@@ -17,9 +17,20 @@ import "jspdf-autotable";
 import { Prescription, Customer } from "../types";
 import { cn } from "../lib/utils";
 
+import { db } from "../firebase";
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  serverTimestamp,
+  query,
+  orderBy
+} from "firebase/firestore";
+import { handleFirestoreError, OperationType } from "../firebaseUtils";
+
 export default function Prescriptions() {
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [search, setSearch] = useState("");
@@ -33,25 +44,29 @@ export default function Prescriptions() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = localStorage.getItem("visionx_token");
-        const [prescRes, custRes] = await Promise.all([
-          fetch("/api/prescriptions", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/customers", { headers: { Authorization: `Bearer ${token}` } })
-        ]);
-        setPrescriptions(await prescRes.json());
-        setCustomers(await custRes.json());
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    const unsubscribers: (() => void)[] = [];
+
+    // Customers listener
+    const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    unsubscribers.push(unsubCustomers);
+
+    // Prescriptions listener
+    const q = query(collection(db, "prescriptions"), orderBy("date", "desc"));
+    const unsubPresc = onSnapshot(q, (snapshot) => {
+      setPrescriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "prescriptions");
+      setLoading(false);
+    });
+    unsubscribers.push(unsubPresc);
+
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
-  const handleExportPDF = (p: Prescription) => {
+  const handleExportPDF = (p: any) => {
     const doc = new jsPDF() as any;
     
     // Header
@@ -59,13 +74,13 @@ export default function Prescriptions() {
     doc.rect(0, 0, 210, 40, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(24);
-    doc.text("VisionX AI - Optical Prescription", 15, 25);
+    doc.text("AI Based Eye Power Detection - Optical Prescription", 15, 25);
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
     doc.text(`Patient: ${p.customer_name}`, 15, 55);
     doc.text(`Date: ${new Date(p.date).toLocaleDateString()}`, 15, 62);
-    doc.text(`Prescription ID: #PX-${p.id.toString().padStart(4, '0')}`, 15, 69);
+    doc.text(`Prescription ID: #PX-${p.id.slice(0, 4).toUpperCase()}`, 15, 69);
 
     // Table
     doc.autoTable({
@@ -95,31 +110,23 @@ export default function Prescriptions() {
     e.preventDefault();
     setLoading(true);
     try {
-      const token = localStorage.getItem("visionx_token");
-      const res = await fetch("/api/prescriptions", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
+      const customer = customers.find(c => c.id === formData.customer_id);
+      await addDoc(collection(db, "prescriptions"), {
+        ...formData,
+        customer_name: customer?.name || "Unknown",
+        created_at: serverTimestamp()
       });
-      if (res.ok) {
-        const newPresc = await res.json();
-        // Refresh list
-        const prescRes = await fetch("/api/prescriptions", { headers: { Authorization: `Bearer ${token}` } });
-        setPrescriptions(await prescRes.json());
-        setIsAdding(false);
-        setFormData({
-          customer_id: "",
-          date: new Date().toISOString().split('T')[0],
-          sph_od: "", cyl_od: "", axis_od: "",
-          sph_os: "", cyl_os: "", axis_os: "",
-          add_power: "", pd: "", doctor_notes: ""
-        });
-      }
+      setIsAdding(false);
+      setFormData({
+        customer_id: "",
+        date: new Date().toISOString().split('T')[0],
+        sph_od: "", cyl_od: "", axis_od: "",
+        sph_os: "", cyl_os: "", axis_os: "",
+        add_power: "", pd: "", doctor_notes: ""
+      });
     } catch (err) {
       console.error(err);
+      handleFirestoreError(err, OperationType.CREATE, "prescriptions");
     } finally {
       setLoading(false);
     }

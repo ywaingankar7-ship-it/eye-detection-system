@@ -24,6 +24,19 @@ import { useGLTF, PerspectiveCamera, Environment, ContactShadows } from "@react-
 import { FaceLandmarker } from "@mediapipe/tasks-vision";
 import { getFaceLandmarker } from "../utils/mediaPipe";
 import * as THREE from "three";
+import { db, auth } from "../firebase";
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
+  orderBy,
+  setDoc
+} from "firebase/firestore";
+import { handleFirestoreError, OperationType, logActivity } from "../firebaseUtils";
 
 function Glasses3DPreview({ url, arDataRef }: { url: string, arDataRef?: React.RefObject<any> }) {
   const { scene } = useGLTF(url);
@@ -65,7 +78,7 @@ export default function Inventory() {
   const [filterType, setFilterType] = useState("all");
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [vtoItem, setVtoItem] = useState<InventoryItem | null>(null);
   const [isVtoOpen, setIsVtoOpen] = useState(false);
@@ -101,7 +114,7 @@ export default function Inventory() {
       const response = await fetch("/api/upload", {
         method: "POST",
         headers: { 
-          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
+          Authorization: `Bearer ${localStorage.getItem("eyepower_token")}` 
         },
         body: formData,
       });
@@ -116,9 +129,26 @@ export default function Inventory() {
   };
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("visionx_user");
+    const savedUser = localStorage.getItem("eyepower_user");
     if (savedUser) setUser(JSON.parse(savedUser));
-    fetchInventory();
+    
+    // Switch to Firestore real-time listener
+    const q = query(collection(db, "inventory"), orderBy("brand", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const inventoryData = snapshot.docs.map(doc => ({
+        id: doc.id as any,
+        ...doc.data()
+      })) as InventoryItem[];
+      setItems(inventoryData);
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore inventory error:", err);
+      handleFirestoreError(err, OperationType.LIST, "inventory");
+      setError("Failed to sync inventory with cloud.");
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -158,7 +188,7 @@ export default function Inventory() {
 
   const fetchInventory = () => {
     fetch("/api/inventory", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
+      headers: { Authorization: `Bearer ${localStorage.getItem("eyepower_token")}` }
     })
     .then(res => {
       if (!res.ok) throw new Error("Failed to fetch inventory");
@@ -177,20 +207,29 @@ export default function Inventory() {
   };
 
   const handleAddToCart = async (item: InventoryItem) => {
+    if (!auth.currentUser) {
+      alert("Please sign in to add items to cart.");
+      return;
+    }
+
     try {
-      const response = await fetch("/api/cart", {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
-        },
-        body: JSON.stringify({ inventory_id: item.id, quantity: 1 })
-      });
-      if (response.ok) {
-        alert(`${item.brand} ${item.model} added to cart!`);
-      }
+      const cartRef = doc(db, `cart/${auth.currentUser.uid}_${item.id}`);
+      await setDoc(cartRef, {
+        uid: auth.currentUser.uid,
+        inventory_id: item.id,
+        brand: item.brand,
+        model: item.model,
+        price: item.price,
+        image_url: item.image_url || "",
+        type: item.type,
+        quantity: 1, // Simple increment logic could be added here
+        added_at: new Date().toISOString()
+      }, { merge: true });
+      
+      alert(`${item.brand} ${item.model} added to cart!`);
     } catch (err) {
       console.error("Failed to add to cart", err);
+      handleFirestoreError(err, OperationType.WRITE, "cart");
     }
   };
 
@@ -260,61 +299,51 @@ export default function Inventory() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("handleAdd triggered. Uploading:", uploading, "isEditing:", isEditing);
-    if (uploading) {
-      console.warn("Upload in progress, blocking submission");
-      return;
-    }
+    if (uploading) return;
     
     try {
-      console.log(isEditing ? "Updating item:" : "Adding item:", newItem);
-      
       let parsedDetails = {};
       try {
         parsedDetails = typeof newItem.details === 'string' ? JSON.parse(newItem.details || "{}") : newItem.details;
       } catch (e) {
-        console.error("Invalid JSON in details:", newItem.details);
-        alert("Invalid JSON in details field. Please check your syntax (e.g. use double quotes).");
+        alert("Invalid JSON in details field.");
         return;
       }
 
-      const payload = {
-        ...newItem,
-        details: parsedDetails
+      const itemData = {
+        brand: newItem.brand,
+        model: newItem.model,
+        type: newItem.type,
+        price: Number(newItem.price),
+        stock: Number(newItem.stock),
+        image_url: newItem.image_url,
+        model_url: newItem.model_url,
+        base_scale: Number(newItem.base_scale),
+        details: parsedDetails,
+        updated_at: new Date().toISOString()
       };
       
-      const url = isEditing ? `/api/inventory/${editingId}` : "/api/inventory";
-      const method = isEditing ? "PUT" : "POST";
-      const token = localStorage.getItem("visionx_token");
-
-      console.log(`Sending ${method} request to ${url}`);
-      
-      const response = await fetch(url, {
-        method: method,
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify(payload),
-      });
-      
-      console.log("Response status:", response.status);
-      
-      if (response.ok) {
-        console.log("Inventory action successful");
-        fetchInventory();
-        setShowModal(false);
-        setIsEditing(false);
-        setEditingId(null);
-        setNewItem({ brand: "", model: "", type: "frame", price: 0, stock: 0, image_url: "", model_url: "", base_scale: 1.0, details: "{}" });
+      if (isEditing && editingId) {
+        const itemRef = doc(db, "inventory", editingId);
+        await updateDoc(itemRef, itemData);
+        await logActivity("Update Inventory", `Updated item: ${itemData.brand} ${itemData.model}`);
       } else {
-        const errorData = await response.json();
-        console.error("Server error details:", errorData);
-        alert(`Failed to ${isEditing ? 'update' : 'add'} item: ${errorData.error || response.statusText}`);
+        await addDoc(collection(db, "inventory"), {
+          ...itemData,
+          created_at: new Date().toISOString()
+        });
+        await logActivity("Add Inventory", `Added new item: ${itemData.brand} ${itemData.model}`);
       }
-    } catch (err) {
-      console.error("Inventory action catch error:", err);
-      alert(`Failed to ${isEditing ? 'update' : 'add'} item. Check console for details.`);
+      
+      setShowModal(false);
+      setIsEditing(false);
+      setEditingId(null);
+      setNewItem({ brand: "", model: "", type: "frame", price: 0, stock: 0, image_url: "", model_url: "", base_scale: 1.0, details: "{}" });
+      alert(isEditing ? "Item updated successfully!" : "Item added to inventory!");
+    } catch (err: any) {
+      console.error("Inventory action error:", err);
+      alert(`Failed to ${isEditing ? 'update' : 'add'} item: ${err.message || 'Unknown error'}`);
+      // handleFirestoreError(err, isEditing ? OperationType.UPDATE : OperationType.CREATE, "inventory");
     }
   };
 
@@ -335,36 +364,16 @@ export default function Inventory() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id: number) => {
-    console.log("Delete button clicked for ID:", id);
-    if (!id) {
-      console.error("Invalid ID for deletion");
-      return;
-    }
+  const handleDelete = async (id: string) => {
+    if (!id) return;
     if (!window.confirm("Are you sure you want to delete this item?")) return;
     try {
-      console.log("Attempting to delete item:", id);
-      const token = localStorage.getItem("visionx_token");
-      console.log("Using token:", token ? "Token exists" : "No token found");
-      
-      const response = await fetch(`/api/inventory/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      console.log("Delete response status:", response.status);
-      
-      if (response.ok) {
-        console.log("Successfully deleted item:", id);
-        fetchInventory();
-      } else {
-        const errorData = await response.json();
-        console.error("Delete failed server-side:", errorData);
-        alert(`Failed to delete item: ${errorData.error || "Unknown error"}`);
-      }
-    } catch (err) {
-      console.error("Delete request error:", err);
-      alert("Failed to delete item. Check console for details.");
+      await deleteDoc(doc(db, "inventory", id));
+      await logActivity("Delete Inventory", `Deleted item ID: ${id}`);
+      alert("Item deleted successfully!");
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      alert(`Failed to delete item: ${err.message || 'Unknown error'}`);
     }
   };
 

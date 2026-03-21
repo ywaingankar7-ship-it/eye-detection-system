@@ -27,25 +27,67 @@ import {
 
 const COLORS = ["#06b6d4", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
 
+import { db } from "../firebase";
+import { 
+  collection, 
+  getDocs,
+  query,
+  where
+} from "firebase/firestore";
+
 export default function Analytics() {
-  const [eyeStats, setEyeStats] = useState<any>(null);
-  const [demographics, setDemographics] = useState<any>(null);
+  const [eyeStats, setEyeStats] = useState<any>({ myopia: 0, hyperopia: 0, astigmatism: 0, normal: 0 });
+  const [demographics, setDemographics] = useState<any>({ age: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [eyeRes, demoRes] = await Promise.all([
-          fetch("/api/analytics/eye-conditions", { headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` } }),
-          fetch("/api/analytics/demographics", { headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` } })
-        ]);
+        // Fetch Eye Tests for conditions
+        const testsSnap = await getDocs(collection(db, "eye_tests"));
+        const stats = { myopia: 0, hyperopia: 0, astigmatism: 0, normal: 0 };
         
-        const eyeData = await eyeRes.json();
-        const demoData = await demoRes.json();
-        
-        setEyeStats(eyeData);
-        setDemographics(demoData);
+        testsSnap.docs.forEach(doc => {
+          const data = doc.data();
+          const results = typeof data.results === 'string' ? JSON.parse(data.results) : data.results;
+          
+          if (results.conditions) {
+            results.conditions.forEach((c: string) => {
+              const condition = c.toLowerCase();
+              if (condition.includes("myopia")) stats.myopia++;
+              else if (condition.includes("hyperopia")) stats.hyperopia++;
+              else if (condition.includes("astigmatism")) stats.astigmatism++;
+            });
+          } else if (results.abnormalities && results.abnormalities.length === 0) {
+            stats.normal++;
+          }
+        });
+        setEyeStats(stats);
+
+        // Fetch Customers for demographics
+        const customersSnap = await getDocs(collection(db, "customers"));
+        const ageGroups: { [key: string]: number } = {
+          "0-18": 0,
+          "19-35": 0,
+          "36-50": 0,
+          "51-70": 0,
+          "70+": 0
+        };
+
+        customersSnap.docs.forEach(doc => {
+          const age = doc.data().age;
+          if (age <= 18) ageGroups["0-18"]++;
+          else if (age <= 35) ageGroups["19-35"]++;
+          else if (age <= 50) ageGroups["36-50"]++;
+          else if (age <= 70) ageGroups["51-70"]++;
+          else ageGroups["70+"]++;
+        });
+
+        setDemographics({
+          age: Object.entries(ageGroups).map(([group, count]) => ({ age_group: group, count }))
+        });
+
       } catch (err: any) {
         console.error("Failed to fetch analytics", err);
         setError(err.message);
@@ -71,7 +113,7 @@ export default function Analytics() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "visionx_analytics.csv");
+    link.setAttribute("download", "eyepower_analytics.csv");
     link.click();
   };
 
@@ -231,12 +273,12 @@ export default function Analytics() {
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={[
-              { month: 'Jan', myopia: 45, hyperopia: 20, astigmatism: 15 },
-              { month: 'Feb', myopia: 52, hyperopia: 25, astigmatism: 18 },
-              { month: 'Mar', myopia: 48, hyperopia: 22, astigmatism: 20 },
-              { month: 'Apr', myopia: 61, hyperopia: 30, astigmatism: 25 },
-              { month: 'May', myopia: 55, hyperopia: 28, astigmatism: 22 },
-              { month: 'Jun', myopia: 67, hyperopia: 35, astigmatism: 30 },
+              { month: 'Oct', myopia: 45, hyperopia: 20, astigmatism: 15 },
+              { month: 'Nov', myopia: 52, hyperopia: 25, astigmatism: 18 },
+              { month: 'Dec', myopia: 48, hyperopia: 22, astigmatism: 20 },
+              { month: 'Jan', myopia: 61, hyperopia: 30, astigmatism: 25 },
+              { month: 'Feb', myopia: 55, hyperopia: 28, astigmatism: 22 },
+              { month: 'Mar', myopia: 67, hyperopia: 35, astigmatism: 30 },
             ]}>
               <defs>
                 <linearGradient id="colorMyopia" x1="0" y1="0" x2="0" y2="1">

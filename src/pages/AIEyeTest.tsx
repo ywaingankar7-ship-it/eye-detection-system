@@ -6,6 +6,18 @@ import { jsPDF } from "jspdf";
 import SnellenChart from "../components/SnellenChart";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
+import { db } from "../firebase";
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  serverTimestamp,
+  query,
+  orderBy,
+  where
+} from "firebase/firestore";
+import { handleFirestoreError, OperationType } from "../firebaseUtils";
+
 export default function AIEyeTest() {
   const [mode, setMode] = useState<"ai" | "manual" | "history" | "face_shape">("ai");
   const [file, setFile] = useState<File | null>(null);
@@ -16,7 +28,7 @@ export default function AIEyeTest() {
   const [eyeType, setEyeType] = useState<"single" | "both" | "unknown" | null>(null);
   const [isQuickScanning, setIsQuickScanning] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
-  const [customerId, setCustomerId] = useState("1");
+  const [customerId, setCustomerId] = useState("");
   const [customers, setCustomers] = useState<any[]>([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -28,40 +40,73 @@ export default function AIEyeTest() {
   });
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("visionx_user");
+    const savedUser = localStorage.getItem("eyepower_user");
     if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      if (parsedUser.role === 'patient') {
-        // Find the customer ID for this patient
-        fetch("/api/customers", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-        })
-        .then(res => {
-          if (!res.ok) throw new Error("Failed to fetch customers");
-          return res.json();
-        })
-        .then(data => {
-          const me = data.find((c: any) => c.email === parsedUser.email);
-          if (me) setCustomerId(me.id.toString());
-          setCustomers(data);
-        })
-        .catch(err => console.error("Error fetching customers:", err));
-      } else {
-        fetch("/api/customers", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-        })
-        .then(res => {
-          if (!res.ok) throw new Error("Failed to fetch customers");
-          return res.json();
-        })
-        .then(data => setCustomers(data))
-        .catch(err => console.error("Error fetching customers:", err));
-      }
+      setUser(JSON.parse(savedUser));
     }
-    
-    fetchHistory();
+
+    const unsubscribers: (() => void)[] = [];
+    const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+
+    // Customers listener
+    if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
+      const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+        const custs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setCustomers(custs);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, "customers");
+      });
+      unsubscribers.push(unsubCustomers);
+    } else if (parsedUser?.role === 'patient') {
+      // Patient only sees their own record
+      const q = query(collection(db, "customers"), where("email", "==", parsedUser.email));
+      const unsubMe = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          const me = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+          setCustomers([me]);
+          setCustomerId(me.id);
+        }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, "customers");
+      });
+      unsubscribers.push(unsubMe);
+    }
+
+    // History listener
+    let historyQuery;
+    if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
+      historyQuery = query(collection(db, "eye_tests"), orderBy("date", "desc"));
+    } else {
+      historyQuery = query(collection(db, "eye_tests"), where("customer_id", "==", parsedUser?.uid || ""), orderBy("date", "desc"));
+    }
+
+    const unsubHistory = onSnapshot(historyQuery, (snapshot) => {
+      setHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "eye_tests");
+    });
+    unsubscribers.push(unsubHistory);
+
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
+
+  const resetAI = () => {
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setFaceShapeResult(null);
+    setEyeType(null);
+  };
+
+  const resetManual = () => {
+    setLeftEyeAcuity("");
+    setRightEyeAcuity("");
+    setManualPower({
+      left: { spherical: "", cylindrical: "", axis: "", redness: "None", irritation: "None" },
+      right: { spherical: "", cylindrical: "", axis: "", redness: "None", irritation: "None" }
+    });
+    setResult(null);
+  };
 
   const startCamera = async () => {
     setIsCameraOpen(true);
@@ -157,17 +202,6 @@ export default function AIEyeTest() {
     while (n--) u8arr[n] = bstr.charCodeAt(n);
     return new Blob([u8arr], { type: mime });
   };
-  const fetchHistory = async () => {
-    try {
-      const response = await fetch("/api/eye-tests", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-      });
-      const data = await response.json();
-      setHistory(data);
-    } catch (err) {
-      console.error("Failed to fetch history:", err);
-    }
-  };
   
   // Manual test states
   const [distance, setDistance] = useState(20);
@@ -245,7 +279,19 @@ export default function AIEyeTest() {
           ],
           config: { responseMimeType: "application/json" }
         });
-        setFaceShapeResult(JSON.parse(response.text || "{}"));
+        const results = JSON.parse(response.text || "{}");
+        setFaceShapeResult(results);
+
+        // Save face shape results to Firestore
+        const customer = customers.find(c => c.id === customerId);
+        await addDoc(collection(db, "eye_tests"), {
+          customer_id: customerId,
+          customer_name: customer?.name || "Walk-in",
+          results: JSON.stringify({ ...results, type: 'face_shape' }),
+          date: new Date().toISOString(),
+          created_at: serverTimestamp(),
+          type: 'face_shape'
+        });
       } else {
         const prompt = `You are a world-class ophthalmologist and optical expert. 
         Analyze the provided eye image with extreme precision for clinical screening.
@@ -301,22 +347,20 @@ export default function AIEyeTest() {
           }
         });
 
-        const results = JSON.parse(response.text || "{}");
-        
-        // Save results to backend
-        await fetch("/api/customers/test", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
-          },
-          body: JSON.stringify({
-            customer_id: customerId,
-            results: results
-          }),
-        });
+      const results = JSON.parse(response.text || "{}");
+      
+      // Save results to Firestore
+      const customer = customers.find(c => c.id === customerId);
+      await addDoc(collection(db, "eye_tests"), {
+        customer_id: customerId,
+        customer_name: customer?.name || "Walk-in",
+        results: JSON.stringify({ ...results, type: 'ai' }),
+        date: new Date().toISOString(),
+        created_at: serverTimestamp(),
+        type: 'ai'
+      });
 
-        setResult(results);
+      setResult(results);
       }
     } catch (err: any) {
       console.error("Diagnosis failed:", err);
@@ -340,27 +384,20 @@ export default function AIEyeTest() {
     };
 
     try {
-      // We'll reuse the eye_tests table but send a different structure
-      // The backend needs to handle this or we just store it as results JSON
-      const response = await fetch("/api/customers/test", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
-        },
-        body: JSON.stringify({
-          customer_id: customerId,
-          results: manualResults
-        }),
+      const customer = customers.find(c => c.id === customerId);
+      await addDoc(collection(db, "eye_tests"), {
+        customer_id: customerId,
+        customer_name: customer?.name || "Walk-in",
+        results: JSON.stringify({ ...manualResults, type: 'manual' }),
+        date: new Date().toISOString(),
+        created_at: serverTimestamp(),
+        type: 'manual'
       });
 
-      if (response.ok) {
-        setResult(manualResults);
-      } else {
-        alert("Failed to save results");
-      }
+      setResult(manualResults);
     } catch (err) {
-      alert("Network error");
+      console.error("Failed to save manual test:", err);
+      handleFirestoreError(err, OperationType.CREATE, "eye_tests");
     } finally {
       setLoading(false);
     }
@@ -379,7 +416,7 @@ export default function AIEyeTest() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
-    doc.text("VISIONX CLINICAL REPORT", 20, 25);
+    doc.text("AI BASED EYE POWER DETECTION REPORT", 20, 25);
     
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -523,12 +560,6 @@ export default function AIEyeTest() {
                   <Activity className="w-5 h-5 text-cyan-400" />
                   Diagnosis History
                 </h3>
-                <button 
-                  onClick={fetchHistory}
-                  className="p-2 hover:bg-white/5 rounded-lg transition-all"
-                >
-                  <Loader2 className="w-4 h-4" />
-                </button>
               </div>
               <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                 {history.map((test) => {
@@ -536,7 +567,15 @@ export default function AIEyeTest() {
                   return (
                     <div 
                       key={test.id}
-                      onClick={() => setResult(res)}
+                      onClick={() => {
+                        if (test.type === 'face_shape') {
+                          setFaceShapeResult(res);
+                          setMode('face_shape');
+                        } else {
+                          setResult(res);
+                          setMode(test.type === 'manual' ? 'manual' : 'ai');
+                        }
+                      }}
                       className="p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all cursor-pointer group"
                     >
                       <div className="flex items-center justify-between mb-2">
@@ -573,10 +612,21 @@ export default function AIEyeTest() {
             </div>
           ) : (mode === "ai" || mode === "face_shape") ? (
             <div className="glass-card">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Upload className="w-5 h-5 text-cyan-400" />
-                {mode === "ai" ? "Upload Eye Image" : "Upload Face Image"}
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-cyan-400" />
+                  {mode === "ai" ? "Upload Eye Image" : "Upload Face Image"}
+                </h3>
+                {preview && (
+                  <button 
+                    onClick={resetAI}
+                    className="text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" />
+                    Reload Input
+                  </button>
+                )}
+              </div>
               <div 
                 {...getRootProps()} 
                 className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer ${
@@ -703,7 +753,17 @@ export default function AIEyeTest() {
                   <Monitor className="w-5 h-5 text-cyan-400" />
                   Snellen Vision Test
                 </h3>
-                <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-lg border border-white/10">
+                <div className="flex items-center gap-4">
+                  {(leftEyeAcuity || rightEyeAcuity) && (
+                    <button 
+                      onClick={resetManual}
+                      className="text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" />
+                      Reload Test
+                    </button>
+                  )}
+                  <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-lg border border-white/10">
                   <Ruler className="w-3 h-3 text-slate-500" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Distance:</span>
                   <select 
@@ -720,6 +780,7 @@ export default function AIEyeTest() {
                   </select>
                 </div>
               </div>
+            </div>
 
               <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
                 <button 

@@ -6,7 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 export default function GeminiChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "bot"; text: string }[]>([
-    { role: "bot", text: "Hello! I'm your VisionX AI Assistant. How can I help you with your eye health or optical needs today?" }
+    { role: "bot", text: "Hello! I'm your AI Based Eye Power Detection Assistant. How can I help you with your eye health or optical needs today?" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,7 +32,7 @@ export default function GeminiChatbot() {
         model: "gemini-3.1-pro-preview",
         contents: userMessage,
         config: {
-          systemInstruction: "You are VisionX AI, a helpful assistant for an Optical Shop ERP. You help patients understand eye health, explain test results, and provide information about eyewear. Keep responses concise, professional, and empathetic. If asked about medical emergencies, advise seeing a doctor immediately.",
+          systemInstruction: "You are AI Based Eye Power Detection Assistant, a helpful assistant for an Optical Shop ERP. You help patients understand eye health, explain test results, and provide information about eyewear. Keep responses concise, professional, and empathetic. If asked about medical emergencies, advise seeing a doctor immediately.",
         }
       });
 
@@ -60,7 +60,7 @@ export default function GeminiChatbot() {
             <div className="p-4 gradient-bg flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bot className="w-5 h-5 text-white" />
-                <span className="font-bold text-white">VisionX AI Assistant</span>
+                <span className="font-bold text-white">AI Assistant</span>
               </div>
               <button onClick={() => setIsOpen(false)} className="text-white/70 hover:text-white">
                 <X className="w-5 h-5" />

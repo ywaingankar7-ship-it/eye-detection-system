@@ -78,6 +78,9 @@ function GlassesModel({ url, arDataRef, manualOffset, baseScale = 1.0 }: { url: 
   );
 }
 
+import { db } from "../firebase";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+
 export default function VirtualTryOn() {
   const [frames, setFrames] = useState<InventoryItem[]>([]);
   const [selectedFrame, setSelectedFrame] = useState<InventoryItem | null>(null);
@@ -135,26 +138,20 @@ export default function VirtualTryOn() {
       if (landmarker) setFaceLandmarker(landmarker);
     };
 
-    const fetchFrames = async () => {
-      try {
-        const token = localStorage.getItem("visionx_token");
-        const res = await fetch("/api/inventory", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        const frameItems = data.filter((i: any) => i.type === 'frame' || i.type === 'sunglasses');
-        setFrames(frameItems);
-        if (frameItems.length > 0) setSelectedFrame(frameItems[0]);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    const unsub = onSnapshot(collection(db, "inventory"), (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
+      const frameItems = items.filter(i => i.type === 'frame' || i.type === 'sunglasses');
+      setFrames(frameItems);
+      if (frameItems.length > 0 && !selectedFrame) setSelectedFrame(frameItems[0]);
+      setLoading(false);
+    }, (err) => {
+      console.error("Failed to fetch inventory", err);
+      setLoading(false);
+    });
 
     initFaceLandmarker();
-    fetchFrames();
-  }, []);
+    return () => unsub();
+  }, [selectedFrame]);
 
   const detectFace = () => {
     if (
@@ -233,7 +230,7 @@ export default function VirtualTryOn() {
     if (imageSrc) {
       const link = document.createElement("a");
       link.href = imageSrc;
-      link.download = "visionx-try-on.png";
+      link.download = "eyepower-try-on.png";
       link.click();
     }
   };

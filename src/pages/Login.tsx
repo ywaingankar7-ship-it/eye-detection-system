@@ -2,54 +2,230 @@ import React, { useState } from "react";
 import { User } from "../types";
 import { Eye, Lock, Mail, ArrowRight, ShieldCheck, User as UserIcon } from "lucide-react";
 import { motion } from "motion/react";
+import { auth, db } from "../firebase";
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  updateProfile,
+  GoogleAuthProvider,
+  signInWithPopup
+} from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { createUserProfile, getUserProfile } from "../firebaseUtils";
+import { Chrome, Sun, Moon } from "lucide-react";
 
 interface LoginProps {
   onLogin: (user: User, token: string) => void;
+  theme: "dark" | "light";
+  toggleTheme: () => void;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("admin@visionx.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("admin@eyepower.ai");
+  const [password, setPassword] = useState("admin@123");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const getPasswordStrength = (pass: string) => {
+    let strength = 0;
+    if (pass.length >= 8) strength++;
+    if (/[A-Z]/.test(pass)) strength++;
+    if (/[a-z]/.test(pass)) strength++;
+    if (/[0-9]/.test(pass)) strength++;
+    if (/[^A-Za-z0-9]/.test(pass)) strength++;
+    return strength;
+  };
+
+  const strength = getPasswordStrength(password);
+  const isPasswordValid = strength >= 5;
+
+  const getStrengthLabel = (s: number) => {
+    if (s === 0) return { label: "Very Weak", color: "bg-slate-700" };
+    if (s <= 2) return { label: "Weak", color: "bg-rose-500" };
+    if (s <= 3) return { label: "Fair", color: "bg-amber-500" };
+    if (s <= 4) return { label: "Good", color: "bg-blue-500" };
+    return { label: "Strong", color: "bg-emerald-500" };
+  };
+
+  const strengthInfo = getStrengthLabel(strength);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const endpoint = isRegistering ? "/api/auth/register" : "/api/auth/login";
-    const body = isRegistering ? { name, email, password } : { email, password };
-
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        onLogin(data.user, data.token);
+      if (isRegistering) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const firebaseUser = userCredential.user;
+        
+        await updateProfile(firebaseUser, { displayName: name });
+        
+        const userData: User = {
+          id: Date.now(), // Legacy ID
+          uid: firebaseUser.uid,
+          name,
+          email,
+          role: email === "admin@eyepower.ai" ? "admin" : "patient"
+        };
+        
+        await createUserProfile(firebaseUser.uid, userData);
+        onLogin(userData, await firebaseUser.getIdToken());
       } else {
-        setError(data.error || (isRegistering ? "Registration failed" : "Login failed"));
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          const firebaseUser = userCredential.user;
+          
+          const profile = await getUserProfile(firebaseUser.uid) as User;
+          const isMasterAdmin = email.toLowerCase() === "admin@eyepower.ai";
+          
+          if (profile) {
+            // Force admin role for the master email and update DB if needed
+            if (isMasterAdmin && profile.role !== "admin") {
+              profile.role = "admin";
+              await createUserProfile(firebaseUser.uid, profile); 
+            }
+            onLogin(profile, await firebaseUser.getIdToken());
+          } else {
+            const userData: User = {
+              id: Date.now(),
+              uid: firebaseUser.uid,
+              name: firebaseUser.displayName || (isMasterAdmin ? "Admin" : "User"),
+              email: firebaseUser.email || "",
+              role: isMasterAdmin ? "admin" : "patient"
+            };
+            await createUserProfile(firebaseUser.uid, userData);
+            onLogin(userData, await firebaseUser.getIdToken());
+          }
+        } catch (err: any) {
+          // AUTO-CREATE ADMIN: If login fails because user doesn't exist AND it's the admin email
+          const isMasterAdmin = email.toLowerCase() === "admin@eyepower.ai";
+          if ((err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") && isMasterAdmin && password === "admin@123") {
+            try {
+              const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+              const firebaseUser = userCredential.user;
+              await updateProfile(firebaseUser, { displayName: "Admin" });
+              
+              const userData: User = {
+                id: Date.now(),
+                uid: firebaseUser.uid,
+                name: "Admin",
+                email: "admin@eyepower.ai",
+                role: "admin"
+              };
+              await createUserProfile(firebaseUser.uid, userData);
+              onLogin(userData, await firebaseUser.getIdToken());
+              return;
+            } catch (createErr: any) {
+              if (createErr.code === "auth/email-already-in-use") {
+                throw err; 
+              }
+              throw createErr;
+            }
+          }
+          throw err;
+        }
       }
-    } catch (err) {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      let msg = (
+        <div className="space-y-2">
+          <p className="font-bold">Authentication Failed</p>
+          <p className="text-xs opacity-90">Something went wrong. Please check the details below:</p>
+        </div>
+      );
+
+      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        const isMasterAdmin = email.toLowerCase() === "admin@eyepower.ai";
+        msg = (
+          <div className="space-y-2">
+            <p className="font-bold">{isMasterAdmin ? "Admin Access Error" : "Account Not Found"}</p>
+            <p className="text-xs opacity-90">
+              {isMasterAdmin 
+                ? "The admin password might have been changed. Please use the default password or contact support." 
+                : "This is a new database. You must click \"Register Now\" below to create your account for the first time."}
+            </p>
+          </div>
+        );
+      } else if (err.code === "auth/operation-not-allowed") {
+        msg = (
+          <div className="space-y-2">
+            <p className="font-bold">Firebase Setup Required</p>
+            <p className="text-xs leading-relaxed">
+              Sign-in providers are disabled. To fix this:<br/>
+              1. Go to <a href="https://console.firebase.google.com/" target="_blank" className="underline font-bold">Firebase Console</a><br/>
+              2. Authentication &gt; Sign-in method<br/>
+              3. Enable <strong>Email/Password</strong> and <strong>Google</strong>.
+            </p>
+          </div>
+        );
+      } else if (err.code === "auth/email-already-in-use") {
+        msg = (
+          <div className="space-y-2">
+            <p className="font-bold">Email Already Registered</p>
+            <p className="text-xs opacity-90">This email is already in use. If this is your account, please click <strong>"Sign In"</strong> below instead of registering.</p>
+          </div>
+        );
+      } else {
+        msg = <p>Error: {err.message || err.code}</p>;
+      }
+      setError(msg as any);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      const firebaseUser = userCredential.user;
+
+      const profile = await getUserProfile(firebaseUser.uid);
+      if (profile) {
+        onLogin(profile as User, await firebaseUser.getIdToken());
+      } else {
+        const userData: User = {
+          id: Date.now(),
+          uid: firebaseUser.uid,
+          name: firebaseUser.displayName || "User",
+          email: firebaseUser.email || "",
+          role: (firebaseUser.email === "harshyadav856258@gmail.com" || firebaseUser.email === "admin@eyepower.ai") ? "admin" : "patient"
+        };
+        await createUserProfile(firebaseUser.uid, userData);
+        onLogin(userData, await firebaseUser.getIdToken());
+      }
+    } catch (err: any) {
+      console.error("Google Auth error:", err);
+      setError(`Google Sign-In failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-slate-950">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[var(--bg-primary)]">
+      {/* Theme Toggle */}
+      <div className="absolute top-8 right-8 z-50">
+        <button 
+          onClick={toggleTheme}
+          className="p-2 glass rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-white/10 transition-all shadow-xl"
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        >
+          {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+      </div>
+
       {/* Background elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-500/10 blur-[120px] rounded-full"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-500/10 blur-[120px] rounded-full"></div>
 
-      <div className="flex w-full max-w-5xl bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-[32px] overflow-hidden shadow-2xl relative z-10">
+      <div className="flex w-full max-w-5xl bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-[32px] overflow-hidden shadow-2xl relative z-10">
         {/* Left Side - Image */}
         <div className="hidden lg:block w-1/2 relative">
           <img 
@@ -58,15 +234,15 @@ export default function Login({ onLogin }: LoginProps) {
             className="w-full h-full object-cover opacity-60 grayscale hover:grayscale-0 transition-all duration-1000"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg-primary)]/80 to-transparent"></div>
           <div className="absolute bottom-12 left-12 right-12">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
             >
-              <h2 className="text-4xl font-black text-white mb-4 leading-tight">Precision Vision <br/><span className="text-cyan-400">Powered by AI</span></h2>
-              <p className="text-slate-300 text-lg">The next generation of optical ERP and automated eye diagnosis systems.</p>
+              <h2 className="text-4xl font-black text-[var(--text-primary)] mb-4 leading-tight">Precision Vision <br/><span className="text-cyan-400">Powered by AI</span></h2>
+              <p className="text-[var(--text-secondary)] text-lg">The next generation of optical ERP and automated eye diagnosis systems.</p>
             </motion.div>
           </div>
         </div>
@@ -82,7 +258,7 @@ export default function Login({ onLogin }: LoginProps) {
                 <Eye className="text-white w-8 h-8" />
               </div>
               <h1 className="text-3xl font-bold tracking-tight mb-2 gradient-text">
-                {isRegistering ? "Create Account" : "VisionX AI"}
+                {isRegistering ? "Create Account" : "AI Based Eye Power Detection"}
               </h1>
               <p className="text-slate-400">
                 {isRegistering ? "Join our eye care platform" : "Optical Shop & Eye Diagnosis ERP"}
@@ -97,19 +273,35 @@ export default function Login({ onLogin }: LoginProps) {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              <button 
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white text-slate-900 rounded-2xl font-bold hover:bg-slate-100 transition-all disabled:opacity-50 mb-4"
+              >
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+                Continue with Google
+              </button>
+
+              <div className="relative flex items-center gap-4 my-6">
+                <div className="flex-1 h-px bg-white/10"></div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Or with Email</span>
+                <div className="flex-1 h-px bg-white/10"></div>
+              </div>
+
               {!isRegistering && (
                 <div className="flex gap-2 mb-4">
                   <button 
                     type="button"
-                    onClick={() => { setEmail("admin@visionx.com"); setPassword("admin123"); }}
-                    className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-cyan-500/10 hover:text-cyan-400 transition-all"
+                    onClick={() => { setEmail("admin@eyepower.ai"); setPassword("admin@123"); }}
+                    className="flex-1 py-2 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-cyan-500/10 hover:text-cyan-400 transition-all"
                   >
                     Admin
                   </button>
                   <button 
                     type="button"
-                    onClick={() => { setEmail("patient@visionx.ai"); setPassword("patient123"); }}
-                    className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
+                    onClick={() => { setEmail("patient@eyepower.ai"); setPassword("patient123"); }}
+                    className="flex-1 py-2 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
                   >
                     Patient
                   </button>
@@ -125,7 +317,7 @@ export default function Login({ onLogin }: LoginProps) {
                       type="text" 
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                       placeholder="John Doe"
                       required
                     />
@@ -141,7 +333,7 @@ export default function Login({ onLogin }: LoginProps) {
                     type="email" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                     placeholder="name@company.com"
                     required
                   />
@@ -153,14 +345,40 @@ export default function Login({ onLogin }: LoginProps) {
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input 
-                    type="password" 
+                    type={showPassword ? "text" : "password"} 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                     placeholder="••••••••"
                     required
                   />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-cyan-400 transition-colors"
+                  >
+                    {showPassword ? <Eye className="w-5 h-5 opacity-50" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
+                {isRegistering && (
+                  <div className="mt-2 px-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Strength: {strengthInfo.label}</span>
+                      <span className="text-[10px] font-bold text-slate-500">{strength}/5</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden flex gap-1">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div 
+                          key={i}
+                          className={`h-full flex-1 transition-all duration-500 ${i <= strength ? strengthInfo.color : "bg-white/5"}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-slate-500 mt-2 leading-relaxed">
+                      Must include 8+ chars, uppercase, lowercase, number, and symbol.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between text-xs">
@@ -173,8 +391,8 @@ export default function Login({ onLogin }: LoginProps) {
 
               <button 
                 type="submit" 
-                disabled={loading}
-                className="w-full gradient-bg py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50"
+                disabled={loading || (isRegistering && !isPasswordValid)}
+                className="w-full gradient-bg py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

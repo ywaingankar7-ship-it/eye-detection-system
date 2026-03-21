@@ -15,9 +15,22 @@ import {
 import { Customer } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 
+import { db } from "../firebase";
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp,
+  query,
+  orderBy
+} from "firebase/firestore";
+import { handleFirestoreError, OperationType, logActivity } from "../firebaseUtils";
+
 export default function Customers() {
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -30,54 +43,47 @@ export default function Customers() {
     gender: "Other"
   });
 
-  const fetchCustomers = () => {
-    fetch("/api/customers", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-    })
-    .then(res => res.json())
-    .then(data => {
-      setCustomers(data);
+  useEffect(() => {
+    const q = query(collection(db, "customers"), orderBy("created_at", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const customerData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCustomers(customerData);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "customers");
       setLoading(false);
     });
-  };
 
-  useEffect(() => {
-    fetchCustomers();
+    return () => unsubscribe();
   }, []);
 
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch("/api/customers", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
-        },
-        body: JSON.stringify(newCustomer)
+      await addDoc(collection(db, "customers"), {
+        ...newCustomer,
+        created_at: serverTimestamp()
       });
-      if (response.ok) {
-        setIsAddModalOpen(false);
-        setNewCustomer({ name: "", email: "", phone: "", address: "", age: "", gender: "Other" });
-        fetchCustomers();
-      }
+      await logActivity("Add Customer", `Added new customer: ${newCustomer.name}`);
+      setIsAddModalOpen(false);
+      setNewCustomer({ name: "", email: "", phone: "", address: "", age: "", gender: "Other" });
     } catch (err) {
       console.error("Failed to add customer:", err);
+      handleFirestoreError(err, OperationType.CREATE, "customers");
     }
   };
 
-  const handleDeleteCustomer = async (id: number) => {
+  const handleDeleteCustomer = async (id: string) => {
     if (!confirm("Are you sure you want to delete this customer?")) return;
     try {
-      const response = await fetch(`/api/customers/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-      });
-      if (response.ok) {
-        fetchCustomers();
-      }
+      await deleteDoc(doc(db, "customers", id));
+      await logActivity("Delete Customer", `Deleted customer ID: ${id}`);
     } catch (err) {
-      alert("Failed to delete customer");
+      console.error("Failed to delete customer:", err);
+      handleFirestoreError(err, OperationType.DELETE, `customers/${id}`);
     }
   };
 
@@ -97,7 +103,7 @@ export default function Customers() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "visionx_customers.csv");
+    link.setAttribute("download", "eyepower_customers.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -275,7 +281,7 @@ export default function Customers() {
                   </div>
                   <div>
                     <h3 className="font-bold text-lg">{customer.name}</h3>
-                    <p className="text-xs text-slate-500">ID: #VX{customer.id.toString().padStart(4, '0')}</p>
+                    <p className="text-xs text-slate-500">ID: #VX{customer.id.slice(0, 4).toUpperCase()}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded-md text-[10px] font-bold uppercase tracking-wider">Active</span>
                     </div>

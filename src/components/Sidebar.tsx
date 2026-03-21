@@ -67,7 +67,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
                 exit={{ opacity: 0, x: -10 }}
                 className="whitespace-nowrap"
               >
-                <h1 className="font-bold text-xl tracking-tight gradient-text">VisionX</h1>
+                <h1 className="font-bold text-sm tracking-tight gradient-text uppercase leading-tight">AI Based Eye Power Detection</h1>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-semibold">AI Optical ERP</p>
               </motion.div>
             )}
@@ -76,7 +76,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
         
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-2 hover:bg-white/5 rounded-lg text-slate-400 transition-colors"
+          className="p-2 hover:bg-[var(--card-hover)] rounded-lg text-slate-400 transition-colors"
         >
           {isCollapsed ? <Menu className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
         </button>
@@ -91,8 +91,8 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
               to={item.path}
               className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 group ${
                 isActive 
-                  ? "bg-white/10 text-cyan-400 border border-white/10 shadow-lg shadow-cyan-500/5" 
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                  ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-lg shadow-cyan-500/5" 
+                  : "text-slate-400 hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -124,10 +124,10 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="bg-white/5 rounded-2xl p-4 mb-4 overflow-hidden"
+              className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl p-4 mb-4 overflow-hidden"
             >
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-cyan-400 border border-white/10 flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[var(--bg-primary)] flex items-center justify-center text-xs font-bold text-cyan-400 border border-[var(--glass-border)] flex-shrink-0">
                   {user.name.charAt(0)}
                 </div>
                 <div className="overflow-hidden">

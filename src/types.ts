@@ -2,6 +2,7 @@ export type Role = 'admin' | 'patient' | 'staff';
 
 export interface User {
   id: number;
+  uid?: string;
   name: string;
   email: string;
   role: Role;
@@ -19,7 +20,7 @@ export interface Customer {
 }
 
 export interface InventoryItem {
-  id: number;
+  id: string;
   type: 'frame' | 'lens' | 'sunglasses' | 'accessory';
   brand: string;
   model: string;
@@ -28,7 +29,7 @@ export interface InventoryItem {
   image_url?: string;
   model_url?: string; // URL for 3D model (.glb/.gltf)
   base_scale: number;
-  details: string; // JSON string
+  details: any; // Can be object or string
 }
 
 export interface Appointment {

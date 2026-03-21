@@ -9,20 +9,22 @@ import { motion, AnimatePresence } from "motion/react";
 interface LayoutProps {
   user: User;
   onLogout: () => void;
+  theme: "dark" | "light";
+  toggleTheme: () => void;
 }
 
-export default function Layout({ user, onLogout }: LayoutProps) {
+export default function Layout({ user, onLogout, theme, toggleTheme }: LayoutProps) {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen bg-[var(--bg-primary)] transition-colors duration-300">
       <Sidebar user={user} onLogout={onLogout} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
       <motion.div 
         initial={false}
         animate={{ marginLeft: isCollapsed ? 80 : 256 }}
         className="flex-1 flex flex-col"
       >
-        <Header user={user} />
+        <Header user={user} theme={theme} toggleTheme={toggleTheme} />
         <main className="flex-1 p-8">
           <AnimatePresence mode="wait">
             <motion.div

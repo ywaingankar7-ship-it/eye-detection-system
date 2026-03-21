@@ -16,9 +16,24 @@ import { Appointment } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 
+import { db, auth } from "../firebase";
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  serverTimestamp,
+  query,
+  orderBy,
+  where,
+  getDocs
+} from "firebase/firestore";
+import { handleFirestoreError, OperationType, logActivity } from "../firebaseUtils";
+
 export default function Appointments() {
   const [user, setUser] = useState<any>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,75 +47,81 @@ export default function Appointments() {
   });
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("visionx_user");
+    const savedUser = localStorage.getItem("eyepower_user");
     if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
+      setUser(JSON.parse(savedUser));
     }
 
-    Promise.all([
-      fetch("/api/appointments", { headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` } }).then(res => {
-        if (!res.ok) throw new Error("Failed to fetch appointments");
-        return res.json();
-      }),
-      fetch("/api/customers", { headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` } }).then(res => {
-        if (!res.ok) throw new Error("Failed to fetch customers");
-        return res.json();
-      })
-    ]).then(([apptData, custData]) => {
-      setAppointments(apptData);
-      setCustomers(custData);
-    }).catch(err => {
-      console.error("Failed to fetch appointments data", err);
-      setError(err.message);
-    }).finally(() => {
+    const unsubscribers: (() => void)[] = [];
+    const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+
+    // Customers listener
+    if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
+      const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+        setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, "customers");
+      });
+      unsubscribers.push(unsubCustomers);
+    } else if (parsedUser?.role === 'patient') {
+      const q = query(collection(db, "customers"), where("email", "==", parsedUser.email));
+      const unsubMe = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          setCustomers([{ id: snapshot.docs[0].id, ...snapshot.docs[0].data() }]);
+        }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, "customers");
+      });
+      unsubscribers.push(unsubMe);
+    }
+
+    // Appointments listener
+    let q;
+    if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
+      q = query(collection(db, "appointments"), orderBy("date", "asc"));
+    } else {
+      q = query(collection(db, "appointments"), where("customer_id", "==", parsedUser?.uid || ""), orderBy("date", "asc"));
+    }
+
+    const unsubAppts = onSnapshot(q, (snapshot) => {
+      setAppointments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (err) => {
+      console.error("Appointments error:", err);
+      handleFirestoreError(err, OperationType.LIST, "appointments");
       setLoading(false);
     });
+    unsubscribers.push(unsubAppts);
+
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
   const handleBook = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch("/api/appointments", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
-        },
-        body: JSON.stringify(newAppt),
+      const customer = customers.find(c => c.id === newAppt.customer_id);
+      await addDoc(collection(db, "appointments"), {
+        ...newAppt,
+        customer_name: customer?.name || "Unknown",
+        customer_email: customer?.email || "",
+        status: "pending",
+        created_at: serverTimestamp()
       });
-      if (response.ok) {
-        const data = await response.json();
-        const customer = customers.find(c => c.id === parseInt(newAppt.customer_id));
-        setAppointments(prev => [...prev, { 
-          id: data.id, 
-          ...newAppt, 
-          customer_id: parseInt(newAppt.customer_id),
-          customer_name: customer?.name || "Unknown",
-          status: "pending" 
-        } as any]);
-        setShowModal(false);
-      }
+      await logActivity("Book Appointment", `Booked appointment for customer: ${customer?.name || "Unknown"} on ${newAppt.date}`);
+      setShowModal(false);
     } catch (err) {
-      alert("Booking failed");
+      console.error("Booking failed:", err);
+      handleFirestoreError(err, OperationType.CREATE, "appointments");
     }
   };
 
-  const updateStatus = async (id: number, status: string) => {
+  const updateStatus = async (id: string, status: string) => {
     try {
-      const response = await fetch(`/api/appointments/${id}`, {
-        method: "PATCH",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
-        },
-        body: JSON.stringify({ status }),
-      });
-      if (response.ok) {
-        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: status as any } : a));
-      }
+      await updateDoc(doc(db, "appointments", id), { status });
+      await logActivity("Update Appointment", `Updated appointment ID: ${id} status to ${status}`);
     } catch (err) {
-      alert("Failed to update status");
+      console.error("Failed to update status:", err);
+      handleFirestoreError(err, OperationType.UPDATE, `appointments/${id}`);
     }
   };
 
@@ -136,17 +157,16 @@ export default function Appointments() {
           <p className="text-slate-400 mt-1">Manage patient visits, eye exams, and consultations.</p>
         </div>
         {user?.role === 'patient' && (
-          <button 
-            onClick={() => {
-              // Auto-select the current patient
-              const me = customers.find(c => c.email === user.email);
-              if (me) {
-                setNewAppt(prev => ({ ...prev, customer_id: me.id.toString() }));
-              }
-              setShowModal(true);
-            }}
-            className="gradient-bg px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20"
-          >
+              <button 
+                onClick={() => {
+                  const me = customers.find(c => c.email === user.email);
+                  if (me) {
+                    setNewAppt(prev => ({ ...prev, customer_id: me.id }));
+                  }
+                  setShowModal(true);
+                }}
+                className="gradient-bg px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+              >
             <Plus className="w-5 h-5" />
             Book Appointment
           </button>
@@ -347,7 +367,7 @@ export default function Appointments() {
                           </span>
                           <span className="flex items-center gap-1.5">
                             <User className="w-4 h-4 text-slate-500" />
-                            Dr. VisionX
+                            Dr. AI Assistant
                           </span>
                         </div>
                       </div>

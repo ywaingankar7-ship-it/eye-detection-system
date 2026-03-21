@@ -1,6 +1,6 @@
 {
-  "name": "Remix: VisionX AI harsh",
-  "description": "A premium AI-powered Optical Shop & Eye Diagnosis Management System with inventory and automated eye test analysis.",
+  "name": "AI Based Eye Power Detection System",
+  "description": "A premium AI-powered Optical Shop & Eye Diagnosis Management System with automated eye power detection and inventory management.",
   "requestFramePermissions": [
     "camera"
   ]

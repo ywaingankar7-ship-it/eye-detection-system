@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "patient", "staff"] },
+        "branch_id": { "type": "integer" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer contact and demographic info",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "age": { "type": "integer" },
+        "gender": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "Eyewear and accessories",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["frame", "lens", "sunglasses", "accessory"] },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "integer" },
+        "image_url": { "type": "string" },
+        "model_url": { "type": "string" },
+        "base_scale": { "type": "number" },
+        "details": { "type": "object" }
+      },
+      "required": ["type", "brand", "model", "price", "stock"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Scheduled eye exams or consultations",
+      "type": "object",
+      "properties": {
+        "customer_id": { "type": "string" },
+        "customer_name": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "completed", "cancelled"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["customer_id", "date", "time", "status"]
+    },
+    "EyeTest": {
+      "title": "Eye Test",
+      "description": "AI-powered eye test results",
+      "type": "object",
+      "properties": {
+        "customer_id": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "results": { "type": "object" },
+        "image_url": { "type": "string" }
+      },
+      "required": ["customer_id", "date", "results"]
+    },
+    "Prescription": {
+      "title": "Prescription",
+      "description": "Optical prescription details",
+      "type": "object",
+      "properties": {
+        "customer_id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "sph_od": { "type": "string" },
+        "cyl_od": { "type": "string" },
+        "axis_od": { "type": "string" },
+        "sph_os": { "type": "string" },
+        "cyl_os": { "type": "string" },
+        "axis_os": { "type": "string" },
+        "add_power": { "type": "string" },
+        "pd": { "type": "string" },
+        "doctor_notes": { "type": "string" }
+      },
+      "required": ["customer_id", "date"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notifications",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "appointment", "order"] },
+        "is_read": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "title", "message", "type", "is_read", "created_at"]
+    },
+    "CartItem": {
+      "title": "Cart Item",
+      "description": "Items in user's shopping cart",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "inventory_id": { "type": "string" },
+        "quantity": { "type": "integer" }
+      },
+      "required": ["user_id", "inventory_id", "quantity"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customer records"
+    },
+    "/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "Product inventory"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Scheduled appointments"
+    },
+    "/eye_tests/{testId}": {
+      "schema": "EyeTest",
+      "description": "Eye test results"
+    },
+    "/prescriptions/{prescriptionId}": {
+      "schema": "Prescription",
+      "description": "Optical prescriptions"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "/cart/{cartItemId}": {
+      "schema": "CartItem",
+      "description": "Shopping cart items"
+    }
+  }
+}

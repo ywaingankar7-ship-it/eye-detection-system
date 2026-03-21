@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - role: string (required, enum: admin, patient, staff)
+    //   - branch_id: int (optional)
+    //
+    // Collection: inventory
+    // Document ID: {itemId}
+    // Fields:
+    //   - type: string (required, enum: frame, lens, sunglasses, accessory)
+    //   - brand: string (required)
+    //   - model: string (required)
+    //   - price: number (required)
+    //   - stock: int (required)
+    //   - image_url: string (optional)
+    //   - model_url: string (optional)
+    //   - base_scale: number (optional)
+    //   - details: map (optional)
+    //
+    // [Other collections follow similar patterns based on blueprint]
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          (request.auth.token.email == "harshyadav856258@gmail.com" || request.auth.token.email == "admin@eyepower.ai")
+        );
+    }
+
+    function isStaff() {
+      return isAuthenticated() && 
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff' || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')) ||
+          isAdmin()
+        );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'name', 'email', 'role']) &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'patient', 'staff'];
+    }
+
+    function isValidInventoryItem(data) {
+      return hasRequiredFields(['type', 'brand', 'model', 'price', 'stock']) &&
+             data.type in ['frame', 'lens', 'sunglasses', 'accessory'] &&
+             data.brand is string && data.brand.size() > 0 && data.brand.size() < 100 &&
+             data.model is string && data.model.size() > 0 && data.model.size() < 100 &&
+             data.price is number && data.price >= 0 &&
+             data.stock is int && data.stock >= 0;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isStaff();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      (isOwner(uid) && request.resource.data.role == 'patient' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      (isOwner(uid) && request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /inventory/{itemId} {
+      allow read: if true; // Publicly viewable catalog
+      allow write: if isAdmin();
+    }
+
+    match /customers/{customerId} {
+      allow read: if isStaff() || (isAuthenticated() && request.auth.token.email == resource.data.email);
+      allow write: if isStaff();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id);
+      allow create: if isAuthenticated() && hasRequiredFields(['customer_id', 'date', 'time', 'status']) &&
+                      (request.auth.uid == request.resource.data.customer_id || isStaff());
+      allow update: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id && 
+                      request.resource.data.customer_id == resource.data.customer_id);
+    }
+
+    match /eye_tests/{testId} {
+      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id);
+      allow write: if isStaff();
+    }
+
+    match /prescriptions/{prescriptionId} {
+      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id);
+      allow write: if isStaff();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.user_id;
+      allow create: if isStaff();
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.user_id && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_read']);
+    }
+
+    match /cart/{cartItemId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.user_id;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.user_id;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.user_id && 
+                      request.auth.uid == request.resource.data.user_id;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.user_id;
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if isStaff();
+      allow write: if isAuthenticated();
+    }
+  }
+}

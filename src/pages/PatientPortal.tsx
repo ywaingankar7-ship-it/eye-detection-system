@@ -16,9 +16,24 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { format, parseISO } from "date-fns";
+import { db, auth } from "../firebase";
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  deleteDoc,
+  orderBy,
+  getDocs,
+  limit
+} from "firebase/firestore";
+import { handleFirestoreError, OperationType } from "../firebaseUtils";
 
 export default function PatientPortal() {
   const [user, setUser] = useState<any>(null);
+  const [customer, setCustomer] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [testResults, setTestResults] = useState<any[]>([]);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
@@ -28,62 +43,89 @@ export default function PatientPortal() {
   const [activeTab, setActiveTab] = useState<"overview" | "prescriptions" | "notifications" | "cart">("overview");
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("visionx_user");
-    if (savedUser) setUser(JSON.parse(savedUser));
+    const savedUser = localStorage.getItem("eyepower_user");
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+    } else {
+      setLoading(false);
+      return;
+    }
+  }, []);
 
-    const fetchData = async () => {
+  useEffect(() => {
+    if (!user) return;
+
+    // 1. Find Customer Record by Email
+    const findCustomer = async () => {
       try {
-        const token = localStorage.getItem("visionx_token");
-        const headers = { Authorization: `Bearer ${token}` };
-        
-        const [apptRes, testRes, prescRes, notifRes, cartRes] = await Promise.all([
-          fetch("/api/patient/appointments", { headers }),
-          fetch("/api/patient/tests", { headers }),
-          fetch("/api/patient/prescriptions", { headers }),
-          fetch("/api/notifications", { headers }),
-          fetch("/api/cart", { headers })
-        ]);
+        const q = query(collection(db, "customers"), where("email", "==", user.email), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const custData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+          setCustomer(custData);
+          
+          // 2. Listen to Customer-specific data
+          const unsubAppts = onSnapshot(
+            query(collection(db, "appointments"), where("customer_id", "==", custData.id), orderBy("date", "desc")),
+            (s) => setAppointments(s.docs.map(d => ({ id: d.id, ...d.data() })))
+          );
 
-        if (apptRes.ok) setAppointments(await apptRes.json());
-        if (testRes.ok) setTestResults(await testRes.json());
-        if (prescRes.ok) setPrescriptions(await prescRes.json());
-        if (notifRes.ok) setNotifications(await notifRes.json());
-        if (cartRes.ok) setCart(await cartRes.json());
+          const unsubTests = onSnapshot(
+            query(collection(db, "eye_tests"), where("customer_id", "==", custData.id), orderBy("date", "desc")),
+            (s) => setTestResults(s.docs.map(d => ({ id: d.id, ...d.data() })))
+          );
+
+          const unsubPresc = onSnapshot(
+            query(collection(db, "prescriptions"), where("customer_id", "==", custData.id), orderBy("date", "desc")),
+            (s) => setPrescriptions(s.docs.map(d => ({ id: d.id, ...d.data() })))
+          );
+
+          return () => {
+            unsubAppts();
+            unsubTests();
+            unsubPresc();
+          };
+        }
       } catch (err) {
-        console.error("Failed to fetch patient data", err);
-      } finally {
-        setLoading(false);
+        console.error("Error finding customer record:", err);
       }
     };
 
-    fetchData();
-  }, []);
+    findCustomer();
 
-  const handleRemoveFromCart = async (id: number) => {
+    // 3. Listen to User-specific data (Notifications & Cart)
+    const unsubNotif = onSnapshot(
+      query(collection(db, "notifications"), where("user_id", "==", user.uid), orderBy("created_at", "desc")),
+      (s) => setNotifications(s.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+
+    const unsubCart = onSnapshot(
+      query(collection(db, "cart"), where("user_id", "==", user.uid)),
+      (s) => setCart(s.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+
+    setLoading(false);
+
+    return () => {
+      unsubNotif();
+      unsubCart();
+    };
+  }, [user]);
+
+  const handleRemoveFromCart = async (id: string) => {
     try {
-      const response = await fetch(`/api/cart/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-      });
-      if (response.ok) {
-        setCart(prev => prev.filter(item => item.id !== id));
-      }
+      await deleteDoc(doc(db, "cart", id));
     } catch (err) {
-      console.error("Failed to remove from cart", err);
+      handleFirestoreError(err, OperationType.DELETE, `cart/${id}`);
     }
   };
 
-  const handleMarkAsRead = async (id: number) => {
+  const handleMarkAsRead = async (id: string) => {
     try {
-      const response = await fetch(`/api/notifications/${id}/read`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-      });
-      if (response.ok) {
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
-      }
+      await updateDoc(doc(db, "notifications", id), { is_read: true });
     } catch (err) {
-      console.error("Failed to mark notification as read", err);
+      handleFirestoreError(err, OperationType.UPDATE, `notifications/${id}`);
     }
   };
 
@@ -163,7 +205,11 @@ export default function PatientPortal() {
             <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-6">
               <div>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Member Since</p>
-                <p className="text-sm font-bold">Feb 2024</p>
+                <p className="text-sm font-bold">
+                  {customer?.created_at ? 
+                    (customer.created_at.toDate ? format(customer.created_at.toDate(), 'MMM yyyy') : format(parseISO(customer.created_at), 'MMM yyyy')) : 
+                    format(new Date(), 'MMM yyyy')}
+                </p>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Patient ID</p>
@@ -213,6 +259,33 @@ export default function PatientPortal() {
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-8"
               >
+                {/* Prominent Eye Test Section */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="glass-card border-4 border-cyan-500 bg-cyan-500/10 p-8 text-center relative overflow-hidden group shadow-[0_0_50px_-12px_rgba(34,211,238,0.5)]"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <Eye className="w-48 h-48 text-cyan-400" />
+                  </div>
+                  <div className="relative z-10">
+                    <h2 className="text-3xl md:text-5xl font-black mb-4 tracking-tighter uppercase leading-none text-[var(--text-primary)]">
+                      START YOUR <br/>
+                      <span className="gradient-text">AI EYE TEST</span>
+                    </h2>
+                    <p className="text-[var(--text-secondary)] text-sm mb-6 font-medium max-w-md mx-auto">
+                      Experience clinical-grade vision analysis powered by advanced computer vision and Gemini 3.1 Pro.
+                    </p>
+                    <button
+                      onClick={() => window.location.href = '/ai-test'}
+                      className="gradient-bg px-8 py-4 rounded-2xl font-black text-lg shadow-[0_15px_40px_rgba(34,211,238,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 mx-auto group"
+                    >
+                      <Activity className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+                      BEGIN DIAGNOSIS
+                    </button>
+                  </div>
+                </motion.div>
+
                 {/* Upcoming Appointments */}
                 <section>
                   <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -225,8 +298,8 @@ export default function PatientPortal() {
                         <div key={appt.id} className="glass-card flex items-center justify-between p-6">
                           <div className="flex items-center gap-6">
                             <div className="text-center min-w-[60px]">
-                              <p className="text-xs font-bold text-slate-500 uppercase">{format(parseISO(appt.date), 'MMM')}</p>
-                              <p className="text-2xl font-black text-cyan-400">{format(parseISO(appt.date), 'dd')}</p>
+                              <p className="text-xs font-bold text-slate-500 uppercase">{format(appt.date instanceof Date ? appt.date : parseISO(appt.date), 'MMM')}</p>
+                              <p className="text-2xl font-black text-cyan-400">{format(appt.date instanceof Date ? appt.date : parseISO(appt.date), 'dd')}</p>
                             </div>
                             <div>
                               <h4 className="font-bold text-lg">Eye Examination</h4>
@@ -265,11 +338,11 @@ export default function PatientPortal() {
                             <div className="w-10 h-10 bg-violet-500/10 rounded-xl flex items-center justify-center text-violet-400">
                               <Eye className="w-6 h-6" />
                             </div>
-                            <span className="text-xs text-slate-500">{format(parseISO(test.date), 'MMM dd, yyyy')}</span>
+                            <span className="text-xs text-slate-500">{format(test.date?.toDate ? test.date.toDate() : parseISO(test.date), 'MMM dd, yyyy')}</span>
                           </div>
-                          <h4 className="font-bold mb-2">AI Diagnosis Report</h4>
+                          <h4 className="font-bold mb-2">{test.type === 'face_shape' ? 'Face Shape Analysis' : 'AI Diagnosis Report'}</h4>
                           <p className="text-xs text-slate-400 line-clamp-2 mb-4">
-                            {JSON.parse(test.results).summary || "Detailed analysis of your eye health and refractive power."}
+                            {typeof test.results === 'string' ? JSON.parse(test.results).summary : test.results.summary || "Detailed analysis of your eye health and refractive power."}
                           </p>
                           <button className="text-cyan-400 text-xs font-bold flex items-center gap-1 group-hover:gap-2 transition-all">
                             View Full Report <ChevronRight className="w-3 h-3" />
@@ -301,7 +374,7 @@ export default function PatientPortal() {
                       <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
                         <div>
                           <h4 className="font-bold text-lg">Optical Prescription</h4>
-                          <p className="text-xs text-slate-400">Issued on {format(parseISO(presc.date), 'MMMM dd, yyyy')}</p>
+                          <p className="text-xs text-slate-400">Issued on {format(presc.date?.toDate ? presc.date.toDate() : parseISO(presc.date), 'MMMM dd, yyyy')}</p>
                         </div>
                         <button className="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg hover:bg-cyan-500 hover:text-white transition-all">
                           <Download className="w-5 h-5" />
@@ -394,10 +467,10 @@ export default function PatientPortal() {
                         <Bell className="w-5 h-5" />
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-bold text-sm">{notif.title}</h4>
-                          <span className="text-[10px] text-slate-500">{format(parseISO(notif.created_at), 'MMM dd, HH:mm')}</span>
-                        </div>
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="font-bold text-sm">{notif.title}</h4>
+                            <span className="text-[10px] text-slate-500">{format(notif.created_at?.toDate ? notif.created_at.toDate() : parseISO(notif.created_at), 'MMM dd, HH:mm')}</span>
+                          </div>
                         <p className="text-sm text-slate-400 leading-relaxed">{notif.message}</p>
                       </div>
                       {!notif.is_read && (
