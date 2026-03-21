@@ -11,7 +11,9 @@ import {
   ShoppingBag,
   Activity,
   Sun,
-  Moon
+  Moon,
+  ShoppingCart,
+  Calendar
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
@@ -136,13 +138,13 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
                   to="/inventory"
                   className="w-full sm:w-auto px-8 py-4 bg-white/5 border border-white/10 rounded-2xl font-bold text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2 group"
                 >
-                  <ShoppingBag className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" /> My Cart
+                  <ShoppingCart className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" /> My Cart
                 </Link>
                 <Link 
                   to="/appointments"
                   className="w-full sm:w-auto px-8 py-4 bg-white/5 border border-white/10 rounded-2xl font-bold text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2 group"
                 >
-                  <Activity className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" /> Book Appointment
+                  <Calendar className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" /> Book Appointment
                 </Link>
               </div>
               

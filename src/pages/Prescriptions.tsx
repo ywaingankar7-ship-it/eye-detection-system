@@ -114,6 +114,7 @@ export default function Prescriptions() {
       await addDoc(collection(db, "prescriptions"), {
         ...formData,
         customer_name: customer?.name || "Unknown",
+        customer_email: customer?.email || "",
         created_at: serverTimestamp()
       });
       setIsAdding(false);

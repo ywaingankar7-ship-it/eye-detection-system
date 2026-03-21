@@ -22,6 +22,64 @@ db.exec(`
     password TEXT NOT NULL,
     role TEXT DEFAULT 'patient'
   );
+
+  CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT,
+    brand TEXT,
+    price REAL,
+    stock INTEGER,
+    image_url TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS appointments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER,
+    customer_name TEXT,
+    date TEXT,
+    time TEXT,
+    status TEXT DEFAULT 'pending',
+    notes TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS prescriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER,
+    customer_name TEXT,
+    customer_email TEXT,
+    date TEXT,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS eye_tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER,
+    customer_name TEXT,
+    customer_email TEXT,
+    results TEXT,
+    date TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    title TEXT,
+    message TEXT,
+    is_read INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 const app = express();
@@ -47,6 +105,28 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
   const url = `/uploads/${req.file.filename}`;
   res.json({ url });
+});
+
+// Migration Routes (Read from legacy SQLite)
+const migrationTables = [
+  { path: 'customers', table: 'customers' },
+  { path: 'inventory', table: 'inventory' },
+  { path: 'appointments', table: 'appointments' },
+  { path: 'prescriptions', table: 'prescriptions' },
+  { path: 'eye-tests', table: 'eye_tests' },
+  { path: 'notifications', table: 'notifications' }
+];
+
+migrationTables.forEach(({ path, table }) => {
+  app.get(`/api/${path}`, (req, res) => {
+    try {
+      const rows = db.prepare(`SELECT * FROM ${table}`).all();
+      res.json(rows);
+    } catch (err) {
+      console.error(`Error fetching ${table}:`, err);
+      res.status(500).json({ error: `Failed to fetch ${table}` });
+    }
+  });
 });
 
 // All other data operations are now handled by Firestore on the frontend.

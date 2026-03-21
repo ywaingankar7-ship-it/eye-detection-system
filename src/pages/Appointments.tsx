@@ -58,7 +58,9 @@ export default function Appointments() {
     // Customers listener
     if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
       const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-        setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log("Loaded customers for admin:", data.length);
+        setCustomers(data);
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, "customers");
       });
@@ -80,7 +82,7 @@ export default function Appointments() {
     if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
       q = query(collection(db, "appointments"), orderBy("date", "asc"));
     } else {
-      q = query(collection(db, "appointments"), where("customer_id", "==", parsedUser?.uid || ""), orderBy("date", "asc"));
+      q = query(collection(db, "appointments"), where("customer_email", "==", parsedUser?.email || ""), orderBy("date", "asc"));
     }
 
     const unsubAppts = onSnapshot(q, (snapshot) => {
@@ -107,6 +109,19 @@ export default function Appointments() {
         status: "pending",
         created_at: serverTimestamp()
       });
+
+      // Create notification for the user
+      if (auth.currentUser) {
+        await addDoc(collection(db, "notifications"), {
+          user_id: auth.currentUser.uid,
+          title: "Appointment Booked",
+          message: `Your appointment for ${newAppt.date} at ${newAppt.time} has been successfully booked and is pending approval.`,
+          type: "appointment",
+          is_read: 0,
+          created_at: new Date().toISOString()
+        });
+      }
+
       await logActivity("Book Appointment", `Booked appointment for customer: ${customer?.name || "Unknown"} on ${newAppt.date}`);
       setShowModal(false);
     } catch (err) {
@@ -117,7 +132,26 @@ export default function Appointments() {
 
   const updateStatus = async (id: string, status: string) => {
     try {
+      const appt = appointments.find(a => a.id === id);
       await updateDoc(doc(db, "appointments", id), { status });
+
+      // Create notification for the patient if we can find their UID
+      // For now, we'll search for the user by email in the users collection
+      const userQuery = query(collection(db, "users"), where("email", "==", appt?.customer_email || ""));
+      const userSnap = await getDocs(userQuery);
+      
+      if (!userSnap.empty) {
+        const patientUid = userSnap.docs[0].id;
+        await addDoc(collection(db, "notifications"), {
+          user_id: patientUid,
+          title: `Appointment ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+          message: `Your appointment for ${appt?.date} has been ${status}.`,
+          type: "appointment",
+          is_read: 0,
+          created_at: new Date().toISOString()
+        });
+      }
+
       await logActivity("Update Appointment", `Updated appointment ID: ${id} status to ${status}`);
     } catch (err) {
       console.error("Failed to update status:", err);
@@ -156,12 +190,14 @@ export default function Appointments() {
           <h1 className="text-3xl font-bold tracking-tight">Appointment Scheduler</h1>
           <p className="text-slate-400 mt-1">Manage patient visits, eye exams, and consultations.</p>
         </div>
-        {user?.role === 'patient' && (
+        {(user?.role === 'admin' || user?.role === 'staff' || user?.role === 'patient') && (
               <button 
                 onClick={() => {
-                  const me = customers.find(c => c.email === user.email);
-                  if (me) {
-                    setNewAppt(prev => ({ ...prev, customer_id: me.id }));
+                  if (user.role === 'patient') {
+                    const me = customers.find(c => c.email === user.email);
+                    if (me) {
+                      setNewAppt(prev => ({ ...prev, customer_id: me.id }));
+                    }
                   }
                   setShowModal(true);
                 }}
@@ -214,8 +250,17 @@ export default function Appointments() {
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                   >
                     <option value="">-- Select --</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {customers.length === 0 ? (
+                      <option disabled>No customers found. Please add one first.</option>
+                    ) : (
+                      customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                    )}
                   </select>
+                  {customers.length === 0 && (
+                    <p className="text-[10px] text-amber-400 mt-1">
+                      Tip: If you have patients in the local database, use "Sync Data" in the Customers page.
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

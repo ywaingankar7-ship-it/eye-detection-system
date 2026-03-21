@@ -13,6 +13,7 @@ import { auth, db } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { testConnection } from "./firebaseUtils";
+import { isEmailAdmin } from "./constants";
 
 // Error Boundary Component
 interface ErrorBoundaryProps {
@@ -75,6 +76,9 @@ const Inventory = lazy(() => import("./pages/Inventory"));
 const AIEyeTest = lazy(() => import("./pages/AIEyeTest"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const VirtualTryOn = lazy(() => import("./pages/VirtualTryOn"));
+const About = lazy(() => import("./pages/About"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 
 const LoadingFallback = () => (
   <div className="min-h-[400px] flex flex-col items-center justify-center gap-4 text-cyan-400">
@@ -88,7 +92,7 @@ export default function App() {
     const saved = localStorage.getItem("eyepower_user");
     if (saved) {
       const parsed = JSON.parse(saved) as User;
-      if (parsed.email?.toLowerCase() === "admin@eyepower.ai") {
+      if (isEmailAdmin(parsed.email)) {
         parsed.role = "admin";
       }
       return parsed;
@@ -100,6 +104,8 @@ export default function App() {
     const saved = localStorage.getItem("eyepower_theme");
     return (saved as "dark" | "light") || "dark";
   });
+
+  const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -113,7 +119,7 @@ export default function App() {
 
   // Force admin role for master account if user is logged in
   useEffect(() => {
-    if (user && user.email?.toLowerCase() === "admin@eyepower.ai" && user.role !== 'admin') {
+    if (user && isEmailAdmin(user.email) && user.role !== 'admin') {
       console.log("Correcting admin role in App state");
       const updatedUser = { ...user, role: 'admin' as const };
       setUser(updatedUser);
@@ -135,7 +141,7 @@ export default function App() {
             const userData = docSnap.data() as User;
             console.log("User profile found:", userData.email, userData.role);
             // Force admin role for the master email (case-insensitive)
-            if (userData.email?.toLowerCase() === "admin@eyepower.ai") {
+            if (isEmailAdmin(userData.email)) {
               userData.role = "admin";
               console.log("Forced admin role for master account (profile exists)");
             }
@@ -143,7 +149,7 @@ export default function App() {
             localStorage.setItem("eyepower_user", JSON.stringify(userData));
           } else {
             // Fallback if profile doesn't exist yet
-            const isMasterAdmin = firebaseUser.email?.toLowerCase() === "admin@eyepower.ai";
+            const isMasterAdmin = isEmailAdmin(firebaseUser.email);
             console.log("User profile NOT found, fallback isMasterAdmin:", isMasterAdmin);
             const fallbackUser: User = {
               id: Date.now(),
@@ -174,7 +180,7 @@ export default function App() {
   const handleLogin = (userData: User, token: string) => {
     console.log("Login attempt:", userData.email, userData.role);
     // Force admin role for the master email
-    if (userData.email?.toLowerCase() === "admin@eyepower.ai") {
+    if (isEmailAdmin(userData.email)) {
       userData.role = "admin";
       console.log("Forced admin role for master account");
     }
@@ -246,6 +252,21 @@ export default function App() {
             <Route path="/try-on" element={
               <Suspense fallback={<LoadingFallback />}>
                 <VirtualTryOn />
+              </Suspense>
+            } />
+            <Route path="/about" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <About />
+              </Suspense>
+            } />
+            <Route path="/settings" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <Settings />
+              </Suspense>
+            } />
+            <Route path="/notifications" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <Notifications />
               </Suspense>
             } />
             {user?.role === 'patient' && (

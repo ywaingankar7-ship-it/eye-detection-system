@@ -27,9 +27,11 @@ import {
   deleteDoc,
   orderBy,
   getDocs,
-  limit
+  limit,
+  addDoc,
+  serverTimestamp
 } from "firebase/firestore";
-import { handleFirestoreError, OperationType } from "../firebaseUtils";
+import { handleFirestoreError, OperationType, logActivity } from "../firebaseUtils";
 
 export default function PatientPortal() {
   const [user, setUser] = useState<any>(null);
@@ -41,6 +43,12 @@ export default function PatientPortal() {
   const [cart, setCart] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "prescriptions" | "notifications" | "cart">("overview");
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [newAppt, setNewAppt] = useState({
+    date: new Date().toISOString().split('T')[0],
+    time: "10:00 AM",
+    notes: ""
+  });
 
   useEffect(() => {
     const savedUser = localStorage.getItem("eyepower_user");
@@ -61,34 +69,42 @@ export default function PatientPortal() {
       try {
         const q = query(collection(db, "customers"), where("email", "==", user.email), limit(1));
         const snap = await getDocs(q);
+        
+        // Always listen for appointments by email (most reliable for patients)
+        const unsubAppts = onSnapshot(
+          query(collection(db, "appointments"), where("customer_email", "==", user.email), orderBy("date", "desc")),
+          (s) => setAppointments(s.docs.map(d => ({ id: d.id, ...d.data() })))
+        );
+
+        let unsubTests = () => {};
+        let unsubPresc = () => {};
+
         if (!snap.empty) {
           const custData = { id: snap.docs[0].id, ...snap.docs[0].data() };
           setCustomer(custData);
           
-          // 2. Listen to Customer-specific data
-          const unsubAppts = onSnapshot(
-            query(collection(db, "appointments"), where("customer_id", "==", custData.id), orderBy("date", "desc")),
-            (s) => setAppointments(s.docs.map(d => ({ id: d.id, ...d.data() })))
-          );
-
-          const unsubTests = onSnapshot(
-            query(collection(db, "eye_tests"), where("customer_id", "==", custData.id), orderBy("date", "desc")),
+          // Listen to Customer-specific data (tests and prescriptions are usually linked by doc ID)
+          unsubTests = onSnapshot(
+            query(collection(db, "eye_tests"), where("customer_email", "==", user.email), orderBy("date", "desc")),
             (s) => setTestResults(s.docs.map(d => ({ id: d.id, ...d.data() })))
           );
 
-          const unsubPresc = onSnapshot(
-            query(collection(db, "prescriptions"), where("customer_id", "==", custData.id), orderBy("date", "desc")),
+          unsubPresc = onSnapshot(
+            query(collection(db, "prescriptions"), where("customer_email", "==", user.email), orderBy("date", "desc")),
             (s) => setPrescriptions(s.docs.map(d => ({ id: d.id, ...d.data() })))
           );
-
-          return () => {
-            unsubAppts();
-            unsubTests();
-            unsubPresc();
-          };
+        } else {
+          setLoading(false); // No customer record found, but still show portal
         }
+
+        return () => {
+          unsubAppts();
+          unsubTests();
+          unsubPresc();
+        };
       } catch (err) {
         console.error("Error finding customer record:", err);
+        setLoading(false);
       }
     };
 
@@ -129,6 +145,37 @@ export default function PatientPortal() {
     }
   };
 
+  const handleBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      // Use customer data if available, otherwise fallback to user data
+      const bookingData = {
+        ...newAppt,
+        customer_id: user.uid, // Always use UID for security rules and consistency
+        customer_name: customer?.name || user.name || "Unknown Patient",
+        customer_email: customer?.email || user.email || "",
+        status: "pending",
+        created_at: serverTimestamp()
+      };
+
+      await addDoc(collection(db, "appointments"), bookingData);
+      
+      await logActivity("Book Appointment", `Patient ${bookingData.customer_name} booked an appointment for ${newAppt.date}`);
+      
+      setShowBookingModal(false);
+      setNewAppt({ date: new Date().toISOString().split('T')[0], time: "10:00 AM", notes: "" });
+      // The onSnapshot listener will pick up the new appointment
+    } catch (err) {
+      console.error("Booking failed:", err);
+      handleFirestoreError(err, OperationType.CREATE, "appointments");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading || !user) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
@@ -157,12 +204,86 @@ export default function PatientPortal() {
             )}
             <span className="text-sm font-bold">Cart</span>
           </button>
-          <button className="gradient-bg px-6 py-3 rounded-xl font-bold shadow-lg shadow-cyan-500/20 flex items-center gap-2">
+          <button 
+            onClick={() => setShowBookingModal(true)}
+            className="gradient-bg px-6 py-3 rounded-xl font-bold shadow-lg shadow-cyan-500/20 flex items-center gap-2"
+          >
             <Calendar className="w-5 h-5" />
             Book Appointment
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showBookingModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBookingModal(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="glass-card w-full max-w-md relative z-10"
+            >
+              <h2 className="text-2xl font-bold mb-6">Book Appointment</h2>
+              <form onSubmit={handleBook} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Date</label>
+                    <input 
+                      type="date"
+                      required
+                      value={newAppt.date}
+                      onChange={(e) => setNewAppt({ ...newAppt, date: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Time</label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="e.g. 10:00 AM"
+                      value={newAppt.time}
+                      onChange={(e) => setNewAppt({ ...newAppt, time: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Notes</label>
+                  <textarea 
+                    value={newAppt.notes}
+                    onChange={(e) => setNewAppt({ ...newAppt, notes: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-24"
+                    placeholder="Reason for visit..."
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setShowBookingModal(false)}
+                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 py-3 gradient-bg rounded-xl font-bold shadow-lg shadow-cyan-500/20 transition-all"
+                  >
+                    Confirm Booking
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Tabs */}
       <div className="flex gap-4 border-b border-white/10 pb-px">

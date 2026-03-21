@@ -57,23 +57,27 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("eyepower_user");
-    if (savedUser) setUser(JSON.parse(savedUser));
+    const savedUserStr = localStorage.getItem("eyepower_user");
+    const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+    
+    if (savedUser) {
+      setUser(savedUser);
+    }
 
     if (!auth.currentUser && !savedUser) {
       navigate("/login");
       return;
     }
 
+    if (!savedUser) return;
+
     // Real-time stats from Firestore
     const unsubscribers: (() => void)[] = [];
 
-    const collections = ['customers', 'eye_tests', 'appointments', 'inventory'];
-    
     // Simple count listeners
     const fetchStats = async () => {
       try {
-        const isStaff = user.role === 'admin' || user.role === 'staff';
+        const isStaff = savedUser.role === 'admin' || savedUser.role === 'staff';
         
         const statsPromises: any = {
           aiTests: getCountFromServer(collection(db, "eye_tests")),
@@ -105,7 +109,7 @@ export default function Dashboard() {
     fetchStats();
 
     // Activities listener - only for staff
-    if (user.role === 'admin' || user.role === 'staff') {
+    if (savedUser.role === 'admin' || savedUser.role === 'staff') {
       const activitiesQuery = query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(10));
       const unsubActivities = onSnapshot(activitiesQuery, (snapshot) => {
         const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -412,7 +416,10 @@ export default function Dashboard() {
               <p className="text-xs text-slate-400">Gemini-3.1-Pro is online and ready for high-precision eye diagnosis.</p>
             </div>
           </div>
-          <button className="w-full mt-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-semibold transition-all">
+          <button 
+            onClick={() => navigate('/notifications')}
+            className="w-full mt-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-semibold transition-all"
+          >
             View All Notifications
           </button>
         </div>

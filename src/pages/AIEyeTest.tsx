@@ -6,7 +6,7 @@ import { jsPDF } from "jspdf";
 import SnellenChart from "../components/SnellenChart";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { 
   collection, 
   onSnapshot, 
@@ -77,7 +77,12 @@ export default function AIEyeTest() {
     if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
       historyQuery = query(collection(db, "eye_tests"), orderBy("date", "desc"));
     } else {
-      historyQuery = query(collection(db, "eye_tests"), where("customer_id", "==", parsedUser?.uid || ""), orderBy("date", "desc"));
+      // Use customer_email for patients as it's the most reliable link for existing tests
+      historyQuery = query(
+        collection(db, "eye_tests"), 
+        where("customer_email", "==", auth.currentUser?.email || parsedUser?.email || ""), 
+        orderBy("date", "desc")
+      );
     }
 
     const unsubHistory = onSnapshot(historyQuery, (snapshot) => {
@@ -285,8 +290,9 @@ export default function AIEyeTest() {
         // Save face shape results to Firestore
         const customer = customers.find(c => c.id === customerId);
         await addDoc(collection(db, "eye_tests"), {
-          customer_id: customerId,
-          customer_name: customer?.name || "Walk-in",
+          customer_id: auth.currentUser?.uid || customerId || "anonymous",
+          customer_name: customer?.name || auth.currentUser?.displayName || user?.name || "Walk-in",
+          customer_email: auth.currentUser?.email || customer?.email || user?.email || "",
           results: JSON.stringify({ ...results, type: 'face_shape' }),
           date: new Date().toISOString(),
           created_at: serverTimestamp(),
@@ -352,8 +358,9 @@ export default function AIEyeTest() {
       // Save results to Firestore
       const customer = customers.find(c => c.id === customerId);
       await addDoc(collection(db, "eye_tests"), {
-        customer_id: customerId,
-        customer_name: customer?.name || "Walk-in",
+        customer_id: auth.currentUser?.uid || customerId || "anonymous",
+        customer_name: customer?.name || auth.currentUser?.displayName || user?.name || "Walk-in",
+        customer_email: auth.currentUser?.email || customer?.email || user?.email || "",
         results: JSON.stringify({ ...results, type: 'ai' }),
         date: new Date().toISOString(),
         created_at: serverTimestamp(),
@@ -388,6 +395,7 @@ export default function AIEyeTest() {
       await addDoc(collection(db, "eye_tests"), {
         customer_id: customerId,
         customer_name: customer?.name || "Walk-in",
+        customer_email: customer?.email || (user?.role === 'patient' ? user.email : ""),
         results: JSON.stringify({ ...manualResults, type: 'manual' }),
         date: new Date().toISOString(),
         created_at: serverTimestamp(),

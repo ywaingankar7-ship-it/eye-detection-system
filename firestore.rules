@@ -43,7 +43,7 @@ service cloud.firestore {
       return isAuthenticated() &&
         (
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          (request.auth.token.email == "harshyadav856258@gmail.com" || request.auth.token.email == "admin@eyepower.ai")
+          (request.auth.token.email in ["harshyadav856258@gmail.com", "admin@eyepower.ai", "admin@visionx.com"])
         );
     }
 
@@ -115,20 +115,20 @@ service cloud.firestore {
     }
 
     match /appointments/{appointmentId} {
-      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id);
+      allow read: if isStaff() || (isAuthenticated() && (request.auth.uid == resource.data.customer_id || (request.auth.token.email != null && request.auth.token.email == resource.data.customer_email)));
       allow create: if isAuthenticated() && hasRequiredFields(['customer_id', 'date', 'time', 'status']) &&
-                      (request.auth.uid == request.resource.data.customer_id || isStaff());
-      allow update: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id && 
+                      (request.auth.uid == request.resource.data.customer_id || (request.auth.token.email != null && request.auth.token.email == request.resource.data.customer_email) || isStaff());
+      allow update: if isStaff() || (isAuthenticated() && (request.auth.uid == resource.data.customer_id || (request.auth.token.email != null && request.auth.token.email == resource.data.customer_email)) && 
                       request.resource.data.customer_id == resource.data.customer_id);
     }
 
     match /eye_tests/{testId} {
-      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id);
-      allow write: if isStaff();
+      allow read: if isStaff() || (isAuthenticated() && (request.auth.uid == resource.data.customer_id || (request.auth.token.email != null && request.auth.token.email == resource.data.customer_email)));
+      allow write: if isStaff() || (isAuthenticated() && (request.auth.uid == request.resource.data.customer_id || (request.auth.token.email != null && request.auth.token.email == request.resource.data.customer_email)));
     }
 
     match /prescriptions/{prescriptionId} {
-      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.customer_id);
+      allow read: if isStaff() || (isAuthenticated() && (request.auth.uid == resource.data.customer_id || request.auth.token.email == resource.data.customer_email));
       allow write: if isStaff();
     }
 

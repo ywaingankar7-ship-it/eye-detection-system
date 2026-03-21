@@ -10,10 +10,14 @@ import {
   History, 
   Download,
   MoreHorizontal,
-  Trash2
+  Trash2,
+  CloudUpload,
+  Loader2,
+  CheckCircle2
 } from "lucide-react";
 import { Customer } from "../types";
 import { motion, AnimatePresence } from "motion/react";
+import { migrateData } from "../services/migrationService";
 
 import { db } from "../firebase";
 import { 
@@ -34,6 +38,8 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<any>(null);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     email: "",
@@ -44,12 +50,18 @@ export default function Customers() {
   });
 
   useEffect(() => {
-    const q = query(collection(db, "customers"), orderBy("created_at", "desc"));
+    const q = query(collection(db, "customers"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const customerData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      // Sort manually if needed, but this ensures all docs show up
+      customerData.sort((a: any, b: any) => {
+        const dateA = a.created_at?.seconds || 0;
+        const dateB = b.created_at?.seconds || 0;
+        return dateB - dateA;
+      });
       setCustomers(customerData);
       setLoading(false);
     }, (error) => {
@@ -59,6 +71,22 @@ export default function Customers() {
 
     return () => unsubscribe();
   }, []);
+
+  const handleMigration = async () => {
+    const token = localStorage.getItem("eyepower_token");
+    if (!token) return;
+    
+    setMigrating(true);
+    try {
+      const result = await migrateData(token);
+      setMigrationResult(result);
+      setTimeout(() => setMigrationResult(null), 5000);
+    } catch (err) {
+      console.error("Migration failed:", err);
+    } finally {
+      setMigrating(false);
+    }
+  };
 
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,6 +146,30 @@ export default function Customers() {
         </div>
         <div className="flex gap-3">
           <button 
+            onClick={handleMigration}
+            disabled={migrating}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+              migrationResult ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "glass hover:bg-white/10"
+            }`}
+          >
+            {migrating ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Syncing...
+              </>
+            ) : migrationResult ? (
+              <>
+                <CheckCircle2 className="w-5 h-5" />
+                Synced
+              </>
+            ) : (
+              <>
+                <CloudUpload className="w-5 h-5" />
+                Sync Data
+              </>
+            )}
+          </button>
+          <button 
             onClick={exportToCSV}
             className="glass px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition-all"
           >
@@ -133,6 +185,27 @@ export default function Customers() {
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {migrationResult && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 mb-6"
+          >
+            <div className="flex items-center gap-3 text-emerald-400">
+              <CheckCircle2 className="w-5 h-5" />
+              <div>
+                <p className="text-sm font-bold">Migration Successful!</p>
+                <p className="text-xs opacity-80">
+                  {Object.entries(migrationResult).map(([key, val]) => `${key}: ${val}`).join(', ')}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isAddModalOpen && (

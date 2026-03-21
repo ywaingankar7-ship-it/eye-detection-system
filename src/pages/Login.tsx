@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { User } from "../types";
-import { Eye, Lock, Mail, ArrowRight, ShieldCheck, User as UserIcon } from "lucide-react";
+import { Eye, Lock, Mail, ArrowRight, ShieldCheck, User as UserIcon, AlertCircle } from "lucide-react";
 import { motion } from "motion/react";
 import { auth, db } from "../firebase";
 import { 
@@ -8,11 +8,13 @@ import {
   createUserWithEmailAndPassword, 
   updateProfile,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { createUserProfile, getUserProfile } from "../firebaseUtils";
 import { Chrome, Sun, Moon } from "lucide-react";
+import { isEmailAdmin } from "../constants";
 
 interface LoginProps {
   onLogin: (user: User, token: string) => void;
@@ -27,7 +29,9 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
   const [password, setPassword] = useState("admin@123");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<any>("");
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState("");
 
   const getPasswordStrength = (pass: string) => {
     let strength = 0;
@@ -69,7 +73,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
           uid: firebaseUser.uid,
           name,
           email,
-          role: email === "admin@eyepower.ai" ? "admin" : "patient"
+          role: isEmailAdmin(email) ? "admin" : "patient"
         };
         
         await createUserProfile(firebaseUser.uid, userData);
@@ -80,7 +84,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
           const firebaseUser = userCredential.user;
           
           const profile = await getUserProfile(firebaseUser.uid) as User;
-          const isMasterAdmin = email.toLowerCase() === "admin@eyepower.ai";
+          const isMasterAdmin = isEmailAdmin(email);
           
           if (profile) {
             // Force admin role for the master email and update DB if needed
@@ -102,8 +106,8 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
           }
         } catch (err: any) {
           // AUTO-CREATE ADMIN: If login fails because user doesn't exist AND it's the admin email
-          const isMasterAdmin = email.toLowerCase() === "admin@eyepower.ai";
-          if ((err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") && isMasterAdmin && password === "admin@123") {
+          const isMasterAdmin = isEmailAdmin(email);
+          if ((err.code === "auth/user-not-found" || err.code === "auth/invalid-credential" || err.code === "auth/operation-not-allowed") && isMasterAdmin && password === "admin@123") {
             try {
               const userCredential = await createUserWithEmailAndPassword(auth, email, password);
               const firebaseUser = userCredential.user;
@@ -113,7 +117,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                 id: Date.now(),
                 uid: firebaseUser.uid,
                 name: "Admin",
-                email: "admin@eyepower.ai",
+                email: email,
                 role: "admin"
               };
               await createUserProfile(firebaseUser.uid, userData);
@@ -138,28 +142,41 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
         </div>
       );
 
-      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
-        const isMasterAdmin = email.toLowerCase() === "admin@eyepower.ai";
+      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential" || err.code === "auth/operation-not-allowed") {
+        const isMasterAdmin = isEmailAdmin(email);
+        const isOperationNotAllowed = err.code === "auth/operation-not-allowed";
+        const isInvalidCredential = err.code === "auth/invalid-credential";
+        
         msg = (
           <div className="space-y-2">
-            <p className="font-bold">{isMasterAdmin ? "Admin Access Error" : "Account Not Found"}</p>
-            <p className="text-xs opacity-90">
-              {isMasterAdmin 
-                ? "The admin password might have been changed. Please use the default password or contact support." 
-                : "This is a new database. You must click \"Register Now\" below to create your account for the first time."}
-            </p>
-          </div>
-        );
-      } else if (err.code === "auth/operation-not-allowed") {
-        msg = (
-          <div className="space-y-2">
-            <p className="font-bold">Firebase Setup Required</p>
-            <p className="text-xs leading-relaxed">
-              Sign-in providers are disabled. To fix this:<br/>
-              1. Go to <a href="https://console.firebase.google.com/" target="_blank" className="underline font-bold">Firebase Console</a><br/>
-              2. Authentication &gt; Sign-in method<br/>
-              3. Enable <strong>Email/Password</strong> and <strong>Google</strong>.
-            </p>
+            <p className="font-bold">{isMasterAdmin ? "Admin Access Error" : "Authentication Error"}</p>
+            <div className="text-xs opacity-90 space-y-2">
+              {(isOperationNotAllowed || isInvalidCredential) && (
+                <div className="p-4 bg-amber-500/20 border border-amber-500/30 rounded-2xl text-amber-200 shadow-lg">
+                  <p className="font-bold mb-2 flex items-center gap-2 text-sm">
+                    <AlertCircle className="w-5 h-5 text-amber-400" />
+                    Critical Configuration Error
+                  </p>
+                  <p className="mb-3 leading-relaxed">The error <code>{err.code}</code> usually indicates a setup issue in the Firebase Console. Please follow these steps to fix it:</p>
+                  <ol className="list-decimal ml-5 mt-2 space-y-2 font-medium">
+                    <li>Open the <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline decoration-amber-500/50 hover:text-white transition-colors">Firebase Console</a>.</li>
+                    <li>Navigate to <b>Authentication</b> &gt; <b>Sign-in method</b>.</li>
+                    <li>Click <b>"Add new provider"</b> and select <b>Email/Password</b>.</li>
+                    <li>Ensure it is <b>Enabled</b> and click <b>Save</b>.</li>
+                    <li>If you are the admin, try <b>"Continue with Google"</b> as a fallback.</li>
+                  </ol>
+                  <div className="mt-4 pt-3 border-t border-amber-500/20 text-[10px] opacity-80 italic">
+                    <p>Note: If you just enabled it, wait 60 seconds for changes to propagate.</p>
+                    <p className="mt-1">Current Project ID: <code className="bg-black/20 px-1 rounded">{auth.app.options.projectId}</code></p>
+                  </div>
+                </div>
+              )}
+              <p className="pt-2">
+                {isMasterAdmin 
+                  ? "The admin password might be incorrect, or the account hasn't been created yet. If you are the owner, try 'Continue with Google' to bypass this." 
+                  : "Invalid credentials. If you don't have an account, please click \"Register Now\" below."}
+              </p>
+            </div>
           </div>
         );
       } else if (err.code === "auth/email-already-in-use") {
@@ -186,16 +203,23 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
       const userCredential = await signInWithPopup(auth, provider);
       const firebaseUser = userCredential.user;
 
-      const profile = await getUserProfile(firebaseUser.uid);
+      const profile = await getUserProfile(firebaseUser.uid) as User;
+      const isMasterAdmin = isEmailAdmin(firebaseUser.email);
+      
       if (profile) {
-        onLogin(profile as User, await firebaseUser.getIdToken());
+        // Force admin role for master emails and update DB if needed
+        if (isMasterAdmin && profile.role !== "admin") {
+          profile.role = "admin";
+          await createUserProfile(firebaseUser.uid, profile); 
+        }
+        onLogin(profile, await firebaseUser.getIdToken());
       } else {
         const userData: User = {
           id: Date.now(),
           uid: firebaseUser.uid,
-          name: firebaseUser.displayName || "User",
+          name: firebaseUser.displayName || (isMasterAdmin ? "Admin" : "User"),
           email: firebaseUser.email || "",
-          role: (firebaseUser.email === "harshyadav856258@gmail.com" || firebaseUser.email === "admin@eyepower.ai") ? "admin" : "patient"
+          role: isMasterAdmin ? "admin" : "patient"
         };
         await createUserProfile(firebaseUser.uid, userData);
         onLogin(userData, await firebaseUser.getIdToken());
@@ -203,6 +227,26 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
     } catch (err: any) {
       console.error("Google Auth error:", err);
       setError(`Google Sign-In failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError("Please enter your email address first.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setResetSuccess("");
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetSuccess("Password reset email sent! Please check your inbox.");
+    } catch (err: any) {
+      console.error("Reset error:", err);
+      setError(`Failed to send reset email: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -258,21 +302,76 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                 <Eye className="text-white w-8 h-8" />
               </div>
               <h1 className="text-3xl font-bold tracking-tight mb-2 gradient-text">
-                {isRegistering ? "Create Account" : "AI Based Eye Power Detection"}
+                {isForgotPassword ? "Reset Password" : (isRegistering ? "Create Account" : "AI Based Eye Power Detection")}
               </h1>
               <p className="text-slate-400">
-                {isRegistering ? "Join our eye care platform" : "Optical Shop & Eye Diagnosis ERP"}
+                {isForgotPassword ? "Enter your email to receive a reset link" : (isRegistering ? "Join our eye care platform" : "Optical Shop & Eye Diagnosis ERP")}
               </p>
             </div>
 
             {error && (
               <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm mb-6 flex items-center gap-3">
                 <ShieldCheck className="w-5 h-5 flex-shrink-0" />
-                {error}
+                <div className="flex-1">{error}</div>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {resetSuccess && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl text-sm mb-6 flex items-center gap-3">
+                <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                <div className="flex-1">{resetSuccess}</div>
+              </div>
+            )}
+
+            {isForgotPassword ? (
+              <form onSubmit={handleForgotPassword} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 ml-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
+                      placeholder="name@company.com"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full gradient-bg py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      Send Reset Link
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+
+                <div className="text-center">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(false);
+                      setError("");
+                      setResetSuccess("");
+                    }}
+                    className="text-cyan-400 font-semibold hover:underline text-sm"
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <form onSubmit={handleSubmit} className="space-y-6">
               <button 
                 type="button"
                 onClick={handleGoogleLogin}
@@ -386,7 +485,17 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                   <input type="checkbox" className="rounded border-white/10 bg-white/5 text-cyan-500" />
                   Remember me
                 </label>
-                <a href="#" className="text-cyan-400 hover:text-cyan-300 transition-colors">Forgot password?</a>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(true);
+                    setError("");
+                    setResetSuccess("");
+                  }}
+                  className="text-cyan-400 hover:text-cyan-300 transition-colors"
+                >
+                  Forgot password?
+                </button>
               </div>
 
               <button 
@@ -432,9 +541,11 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                 </>
               )}
             </div>
-          </motion.div>
-        </div>
-      </div>
+          </>
+        )}
+      </motion.div>
     </div>
-  );
+  </div>
+</div>
+);
 }
