@@ -545,7 +545,8 @@ export default function AIEyeTest() {
 
     const calculateScore = (eye: any) => {
       let vision = 100;
-      const sph = parseFloat(eye?.spherical || "0");
+      const sphValue = eye?.spherical || "0";
+      const sph = isNaN(parseFloat(sphValue)) ? 0 : parseFloat(sphValue);
       vision = Math.max(0, 100 - (Math.abs(sph) * 15));
 
       let health = 100;
@@ -572,9 +573,10 @@ export default function AIEyeTest() {
   };
 
   const healthData = getHealthData();
-  const overallScore = healthData.length > 0 
+  const rawOverallScore = healthData.length > 0 
     ? Math.round(healthData.reduce((acc, curr) => acc + (curr.left + curr.right) / 2, 0) / healthData.length)
     : 0;
+  const overallScore = isNaN(rawOverallScore) ? 0 : rawOverallScore;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -1247,7 +1249,7 @@ export default function AIEyeTest() {
                           ? <span className="text-slate-600 text-xl">Not Scanned</span>
                           : result.left_eye?.power_string && result.left_eye.power_string !== "0.00 / 0.00 x 0" 
                           ? result.left_eye.power_string 
-                          : (result.left_eye?.spherical === "0.00" || !result.left_eye?.spherical) ? "Normal (0.00)" : `${result.left_eye?.spherical} / ${result.left_eye?.cylindrical} x ${result.left_eye?.axis}`}
+                          : (result.left_eye?.spherical === "0.00" || !result.left_eye?.spherical || isNaN(parseFloat(result.left_eye.spherical))) ? "Normal (0.00)" : `${result.left_eye?.spherical} / ${result.left_eye?.cylindrical} x ${result.left_eye?.axis}`}
                       </div>
                       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
                         <div className="text-center">
@@ -1275,7 +1277,7 @@ export default function AIEyeTest() {
                           ? <span className="text-slate-600 text-xl">Not Scanned</span>
                           : result.right_eye?.power_string && result.right_eye.power_string !== "0.00 / 0.00 x 0" 
                           ? result.right_eye.power_string 
-                          : (result.right_eye?.spherical === "0.00" || !result.right_eye?.spherical) ? "Normal (0.00)" : `${result.right_eye?.spherical} / ${result.right_eye?.cylindrical} x ${result.right_eye?.axis}`}
+                          : (result.right_eye?.spherical === "0.00" || !result.right_eye?.spherical || isNaN(parseFloat(result.right_eye.spherical))) ? "Normal (0.00)" : `${result.right_eye?.spherical} / ${result.right_eye?.cylindrical} x ${result.right_eye?.axis}`}
                       </div>
                       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
                         <div className="text-center">

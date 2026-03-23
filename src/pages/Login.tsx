@@ -107,8 +107,11 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
         } catch (err: any) {
           // AUTO-CREATE ADMIN: If login fails because user doesn't exist AND it's the admin email
           const isMasterAdmin = isEmailAdmin(email);
-          if ((err.code === "auth/user-not-found" || err.code === "auth/invalid-credential" || err.code === "auth/operation-not-allowed") && isMasterAdmin && password === "admin@123") {
+          const isUserNotFound = err.code === "auth/user-not-found" || err.code === "auth/invalid-credential" || err.code === "auth/operation-not-allowed";
+          
+          if (isUserNotFound && isMasterAdmin && password === "admin@123") {
             try {
+              console.log("Auto-creating admin account...");
               const userCredential = await createUserWithEmailAndPassword(auth, email, password);
               const firebaseUser = userCredential.user;
               await updateProfile(firebaseUser, { displayName: "Admin" });
@@ -124,6 +127,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
               onLogin(userData, await firebaseUser.getIdToken());
               return;
             } catch (createErr: any) {
+              console.error("Auto-create failed:", createErr);
               if (createErr.code === "auth/email-already-in-use") {
                 throw err; 
               }
@@ -142,11 +146,13 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
         </div>
       );
 
-      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential" || err.code === "auth/operation-not-allowed") {
-        const isMasterAdmin = isEmailAdmin(email);
-        const isOperationNotAllowed = err.code === "auth/operation-not-allowed";
-        const isInvalidCredential = err.code === "auth/invalid-credential";
-        
+      const isMasterAdmin = isEmailAdmin(email);
+      const isOperationNotAllowed = err.code === "auth/operation-not-allowed";
+      const isInvalidCredential = err.code === "auth/invalid-credential";
+      const isUserNotFound = err.code === "auth/user-not-found";
+      const isWrongPassword = err.code === "auth/wrong-password";
+      
+      if (isUserNotFound || isWrongPassword || isInvalidCredential || isOperationNotAllowed) {
         msg = (
           <div className="space-y-2">
             <p className="font-bold">{isMasterAdmin ? "Admin Access Error" : "Authentication Error"}</p>
@@ -155,19 +161,17 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                 <div className="p-4 bg-amber-500/20 border border-amber-500/30 rounded-2xl text-amber-200 shadow-lg">
                   <p className="font-bold mb-2 flex items-center gap-2 text-sm">
                     <AlertCircle className="w-5 h-5 text-amber-400" />
-                    Critical Configuration Error
+                    Action Required: Enable Email/Password
                   </p>
-                  <p className="mb-3 leading-relaxed">The error <code>{err.code}</code> usually indicates a setup issue in the Firebase Console. Please follow these steps to fix it:</p>
+                  <p className="mb-3 leading-relaxed">The error <code>{err.code}</code> usually indicates that <strong>Email/Password Sign-In</strong> is not enabled in your Firebase project.</p>
                   <ol className="list-decimal ml-5 mt-2 space-y-2 font-medium">
-                    <li>Open the <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline decoration-amber-500/50 hover:text-white transition-colors">Firebase Console</a>.</li>
-                    <li>Navigate to <b>Authentication</b> &gt; <b>Sign-in method</b>.</li>
+                    <li>Go to the <a href={`https://console.firebase.google.com/project/${auth.app.options.projectId}/authentication/providers`} target="_blank" rel="noopener noreferrer" className="underline decoration-amber-500/50 hover:text-white transition-colors">Firebase Console Sign-In Providers</a>.</li>
                     <li>Click <b>"Add new provider"</b> and select <b>Email/Password</b>.</li>
-                    <li>Ensure it is <b>Enabled</b> and click <b>Save</b>.</li>
-                    <li>If you are the admin, try <b>"Continue with Google"</b> as a fallback.</li>
+                    <li>Toggle <b>"Enable"</b> and click <b>Save</b>.</li>
+                    <li>Wait 30 seconds and try again.</li>
                   </ol>
                   <div className="mt-4 pt-3 border-t border-amber-500/20 text-[10px] opacity-80 italic">
-                    <p>Note: If you just enabled it, wait 60 seconds for changes to propagate.</p>
-                    <p className="mt-1">Current Project ID: <code className="bg-black/20 px-1 rounded">{auth.app.options.projectId}</code></p>
+                    <p>Current Project ID: <code className="bg-black/20 px-1 rounded">{auth.app.options.projectId}</code></p>
                   </div>
                 </div>
               )}
@@ -399,7 +403,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                   </button>
                   <button 
                     type="button"
-                    onClick={() => { setEmail("patient@eyepower.ai"); setPassword("patient123"); }}
+                    onClick={() => { setEmail("patient@eyepower.ai"); setPassword("Patient@123"); }}
                     className="flex-1 py-2 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
                   >
                     Patient

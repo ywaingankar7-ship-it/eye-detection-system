@@ -98,6 +98,11 @@ const upload = multer({ storage });
 
 app.use("/uploads", express.static(uploadDir));
 
+// Fallback for missing uploads - return 404 JSON instead of HTML
+app.get("/uploads/*", (req, res) => {
+  res.status(404).json({ error: "File not found" });
+});
+
 // --- API ROUTES ---
 
 // File Upload (Still used by Inventory.tsx)

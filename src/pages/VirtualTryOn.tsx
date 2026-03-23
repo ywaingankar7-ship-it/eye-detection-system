@@ -81,6 +81,27 @@ function GlassesModel({ url, arDataRef, manualOffset, baseScale = 1.0 }: { url: 
 import { db } from "../firebase";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 
+// Local Error Boundary for 3D Model
+class ModelErrorBoundary extends React.Component<{ children: React.ReactNode, fallback: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode, fallback: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any) {
+    console.error("Model loading failed:", error);
+  }
+
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
 export default function VirtualTryOn() {
   const [frames, setFrames] = useState<InventoryItem[]>([]);
   const [selectedFrame, setSelectedFrame] = useState<InventoryItem | null>(null);
@@ -88,6 +109,8 @@ export default function VirtualTryOn() {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [faceLandmarker, setFaceLandmarker] = useState<FaceLandmarker | null>(null);
+  const [isModelValid, setIsModelValid] = useState<boolean | null>(null);
+  const [isValidatingModel, setIsValidatingModel] = useState(false);
   
   const [vtoActive, setVtoActive] = useState(false);
   
@@ -152,6 +175,29 @@ export default function VirtualTryOn() {
     initFaceLandmarker();
     return () => unsub();
   }, [selectedFrame]);
+
+  // Validate model URL before trying to load it in 3D
+  useEffect(() => {
+    if (selectedFrame?.model_url) {
+      setIsValidatingModel(true);
+      const fullUrl = selectedFrame.model_url.startsWith('http') 
+        ? selectedFrame.model_url 
+        : `${window.location.origin}${selectedFrame.model_url}`;
+        
+      fetch(fullUrl, { method: 'HEAD' })
+        .then(res => {
+          setIsModelValid(res.ok);
+          setIsValidatingModel(false);
+        })
+        .catch(() => {
+          setIsModelValid(false);
+          setIsValidatingModel(false);
+        });
+    } else {
+      setIsModelValid(false);
+      setIsValidatingModel(false);
+    }
+  }, [selectedFrame?.model_url]);
 
   const detectFace = () => {
     if (
@@ -355,24 +401,72 @@ export default function VirtualTryOn() {
 
             {/* AR Overlay (2D or 3D) */}
             <div className="absolute inset-0 pointer-events-none z-30">
-              {selectedFrame?.model_url ? (
-                <Canvas>
-                  <PerspectiveCamera makeDefault position={[0, 0, 10]} />
-                  <Suspense fallback={null}>
-                    <Environment preset="city" />
-                    <group scale={[-1, 1, 1]}>
-                      <GlassesModel 
-                        url={selectedFrame.model_url} 
-                        arDataRef={arDataRef} 
-                        manualOffset={manualOffset} 
-                        baseScale={selectedFrame.base_scale}
-                      />
-                    </group>
-                    <ContactShadows opacity={0.5} scale={10} blur={1} far={10} resolution={256} color="#000000" />
-                  </Suspense>
-                  <ambientLight intensity={0.5} />
-                  <pointLight position={[10, 10, 10]} />
-                </Canvas>
+              {selectedFrame?.model_url && isModelValid !== false ? (
+                <ModelErrorBoundary fallback={
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-2xl text-xs font-bold flex flex-col items-center gap-2 pointer-events-auto">
+                      <AlertCircle className="w-6 h-6" />
+                      3D Model Missing - Using 2D Fallback
+                    </div>
+                    {/* 2D Fallback Image */}
+                    <AnimatePresence>
+                      {arState.visible && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ 
+                            opacity: 1,
+                            left: `${(100 - arState.x) + manualOffset.x}%`,
+                            top: `${arState.y + manualOffset.y}%`,
+                            scale: arState.scale * manualOffset.scale,
+                            rotate: -arState.rotation
+                          }}
+                          exit={{ opacity: 0 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                          style={{
+                            position: 'absolute',
+                            transform: 'translate(-50%, -50%)',
+                            width: '100%',
+                            maxWidth: '800px',
+                          }}
+                        >
+                          <img 
+                            src={selectedFrame.image_url || `https://picsum.photos/seed/${selectedFrame.id}/400/200`} 
+                            alt="Frame Overlay"
+                            className="w-full h-auto drop-shadow-2xl"
+                            referrerPolicy="no-referrer"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                }>
+                  {isValidatingModel ? (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-2 text-cyan-400">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest">Validating 3D Model...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <Canvas>
+                      <PerspectiveCamera makeDefault position={[0, 0, 10]} />
+                      <Suspense fallback={null}>
+                        <Environment preset="city" />
+                        <group scale={[-1, 1, 1]}>
+                          <GlassesModel 
+                            url={selectedFrame.model_url} 
+                            arDataRef={arDataRef} 
+                            manualOffset={manualOffset} 
+                            baseScale={selectedFrame.base_scale}
+                          />
+                        </group>
+                        <ContactShadows opacity={0.5} scale={10} blur={1} far={10} resolution={256} color="#000000" />
+                      </Suspense>
+                      <ambientLight intensity={0.5} />
+                      <pointLight position={[10, 10, 10]} />
+                    </Canvas>
+                  )}
+                </ModelErrorBoundary>
               ) : (
                 <AnimatePresence>
                   {selectedFrame && arState.visible && (
