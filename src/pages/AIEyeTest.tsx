@@ -22,6 +22,7 @@ import {
 } from "recharts";
 
 import { db, auth } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { 
   collection, 
   onSnapshot, 
@@ -163,59 +164,69 @@ export default function AIEyeTest() {
   }, [isCameraOpen, faceLandmarker, detectFace]);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("eyepower_user");
+    const savedUserStr = localStorage.getItem("eyepower_user");
+    const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      setUser(savedUser);
     }
 
     const unsubscribers: (() => void)[] = [];
-    const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+    
+    // Wait for auth to be fully initialized
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!firebaseUser) return;
+      
+      const parsedUser = savedUser || (firebaseUser ? { email: firebaseUser.email, role: 'patient' } : null);
 
-    // Customers listener
-    if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
-      const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-        const custs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setCustomers(custs);
+      // Customers listener
+      if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
+        const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+          const custs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setCustomers(custs);
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, "customers");
+        });
+        unsubscribers.push(unsubCustomers);
+      } else if (parsedUser?.role === 'patient') {
+        // Patient only sees their own record
+        const q = query(collection(db, "customers"), where("email", "==", parsedUser.email));
+        const unsubMe = onSnapshot(q, (snapshot) => {
+          if (!snapshot.empty) {
+            const me = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+            setCustomers([me]);
+            setCustomerId(me.id);
+          }
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, "customers");
+        });
+        unsubscribers.push(unsubMe);
+      }
+
+      // History listener
+      let historyQuery;
+      if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
+        historyQuery = query(collection(db, "eye_tests"), orderBy("date", "desc"));
+      } else {
+        // Use customer_email for patients as it's the most reliable link for existing tests
+        historyQuery = query(
+          collection(db, "eye_tests"), 
+          where("customer_email", "==", auth.currentUser?.email || parsedUser?.email || ""), 
+          orderBy("date", "desc")
+        );
+      }
+
+      const unsubHistory = onSnapshot(historyQuery, (snapshot) => {
+        setHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, "customers");
+        handleFirestoreError(error, OperationType.LIST, "eye_tests");
       });
-      unsubscribers.push(unsubCustomers);
-    } else if (parsedUser?.role === 'patient') {
-      // Patient only sees their own record
-      const q = query(collection(db, "customers"), where("email", "==", parsedUser.email));
-      const unsubMe = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const me = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-          setCustomers([me]);
-          setCustomerId(me.id);
-        }
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, "customers");
-      });
-      unsubscribers.push(unsubMe);
-    }
-
-    // History listener
-    let historyQuery;
-    if (parsedUser?.role === 'admin' || parsedUser?.role === 'staff') {
-      historyQuery = query(collection(db, "eye_tests"), orderBy("date", "desc"));
-    } else {
-      // Use customer_email for patients as it's the most reliable link for existing tests
-      historyQuery = query(
-        collection(db, "eye_tests"), 
-        where("customer_email", "==", auth.currentUser?.email || parsedUser?.email || ""), 
-        orderBy("date", "desc")
-      );
-    }
-
-    const unsubHistory = onSnapshot(historyQuery, (snapshot) => {
-      setHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, "eye_tests");
+      unsubscribers.push(unsubHistory);
     });
-    unsubscribers.push(unsubHistory);
 
-    return () => unsubscribers.forEach(unsub => unsub());
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+      unsubscribeAuth();
+    };
   }, []);
 
   const resetAI = () => {

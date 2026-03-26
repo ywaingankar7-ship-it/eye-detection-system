@@ -18,6 +18,7 @@ import {
   Box
 } from "lucide-react";
 import { InventoryItem } from "../types";
+import { ModelErrorBoundary } from "../components/ModelErrorBoundary";
 import { motion, AnimatePresence } from "motion/react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF, PerspectiveCamera, Environment, ContactShadows } from "@react-three/drei";
@@ -103,12 +104,28 @@ export default function Inventory() {
   const [uploading, setUploading] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'image_url' | 'model_url') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Warning for .gltf files
+    if (field === 'model_url') {
+      const hasGltf = Array.from(files).some(f => f.name.toLowerCase().endsWith('.gltf'));
+      if (hasGltf) {
+        const confirmGltf = window.confirm(
+          "Warning: .gltf files often require additional .bin and texture files to load correctly. " +
+          "Please select ALL associated files (the .gltf, the .bin, and any textures) together. " +
+          "We strongly recommend using .glb files instead, as they are self-contained. " +
+          "Do you want to proceed?"
+        );
+        if (!confirmGltf) return;
+      }
+    }
 
     setUploading(true);
     const formData = new FormData();
-    formData.append("file", file);
+    for (let i = 0; i < files.length; i++) {
+      formData.append("files", files[i]);
+    }
 
     try {
       const response = await fetch("/api/upload", {
@@ -120,7 +137,17 @@ export default function Inventory() {
       });
       if (!response.ok) throw new Error("Upload failed");
       const data = await response.json();
-      setNewItem(prev => ({ ...prev, [field]: data.url }));
+      
+      // If multiple files were uploaded, find the .gltf or .glb as the main URL
+      let finalUrl = data.url;
+      if (data.files && data.files.length > 1) {
+        const modelFile = data.files.find((f: any) => 
+          f.name.toLowerCase().endsWith('.gltf') || f.name.toLowerCase().endsWith('.glb')
+        );
+        if (modelFile) finalUrl = modelFile.url;
+      }
+      
+      setNewItem(prev => ({ ...prev, [field]: finalUrl }));
     } catch (err) {
       alert("Failed to upload file");
     } finally {
@@ -473,18 +500,20 @@ export default function Inventory() {
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                       {vtoItem.model_url ? (
                         <div className="w-full h-full">
-                          <Canvas>
-                            <PerspectiveCamera makeDefault position={[0, 0, 5]} />
-                            <Suspense fallback={null}>
-                              <Environment preset="city" />
-                              <group scale={[-1, 1, 1]}>
-                                <Glasses3DPreview url={vtoItem.model_url} arDataRef={arDataRef} />
-                              </group>
-                              <ContactShadows opacity={0.5} scale={10} blur={1} far={10} resolution={256} color="#000000" />
-                            </Suspense>
-                            <ambientLight intensity={0.5} />
-                            <pointLight position={[10, 10, 10]} />
-                          </Canvas>
+                          <ModelErrorBoundary modelUrl={vtoItem.model_url}>
+                            <Canvas>
+                              <PerspectiveCamera makeDefault position={[0, 0, 5]} />
+                              <Suspense fallback={null}>
+                                <Environment preset="city" />
+                                <group scale={[-1, 1, 1]}>
+                                  <Glasses3DPreview url={vtoItem.model_url} arDataRef={arDataRef} />
+                                </group>
+                                <ContactShadows opacity={0.5} scale={10} blur={1} far={10} resolution={256} color="#000000" />
+                              </Suspense>
+                              <ambientLight intensity={0.5} />
+                              <pointLight position={[10, 10, 10]} />
+                            </Canvas>
+                          </ModelErrorBoundary>
                         </div>
                       ) : (
                         <div className="relative w-64 h-32">
@@ -615,11 +644,12 @@ export default function Inventory() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">3D Model (.glb)</label>
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">3D Model (.glb recommended)</label>
                   <div className="flex gap-2">
                     <input 
                       type="file"
-                      accept=".glb,.gltf"
+                      accept=".glb,.gltf,.bin,image/*"
+                      multiple={true}
                       onChange={(e) => handleFileUpload(e, 'model_url')}
                       className="hidden"
                       id="model-upload"
@@ -632,6 +662,9 @@ export default function Inventory() {
                       {newItem.model_url ? "Model Selected" : "Upload 3D Model"}
                     </label>
                   </div>
+                  <p className="text-[10px] text-slate-500 italic">
+                    Note: .glb files are self-contained. .gltf files may fail if they reference external .bin or texture files.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

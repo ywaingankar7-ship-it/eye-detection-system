@@ -1,6 +1,7 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { User } from "../types";
-import { Eye, Lock, Mail, ArrowRight, ShieldCheck, User as UserIcon, AlertCircle } from "lucide-react";
+import { Eye, Lock, Mail, ArrowRight, ShieldCheck, User as UserIcon, AlertCircle, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import { auth, db } from "../firebase";
 import { 
@@ -23,6 +24,7 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
+  const navigate = useNavigate();
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("admin@eyepower.ai");
@@ -258,6 +260,18 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[var(--bg-primary)]">
+      {/* Back Button */}
+      <div className="absolute top-8 left-8 z-50">
+        <button 
+          onClick={() => navigate("/")}
+          className="p-2 glass rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-white/10 transition-all shadow-xl flex items-center gap-2 px-4"
+          title="Back to Home"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="text-sm font-bold">Back</span>
+        </button>
+      </div>
+
       {/* Theme Toggle */}
       <div className="absolute top-8 right-8 z-50">
         <button 
@@ -273,48 +287,44 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-500/10 blur-[120px] rounded-full"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-500/10 blur-[120px] rounded-full"></div>
 
-      <div className="flex w-full max-w-5xl bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-[32px] overflow-hidden shadow-2xl relative z-10">
+      <div className="flex w-full max-w-3xl bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-[32px] overflow-hidden shadow-2xl relative z-10">
         {/* Left Side - Image */}
         <div className="hidden lg:block w-1/2 relative">
           <img 
             src="https://picsum.photos/seed/eye-scan/800/1200?blur=1" 
             alt="Eye Diagnosis Machine" 
-            className="w-full h-full object-cover opacity-60 grayscale hover:grayscale-0 transition-all duration-1000"
+            className="absolute inset-0 w-full h-full object-cover opacity-60 grayscale hover:grayscale-0 transition-all duration-1000"
             referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg-primary)]/80 to-transparent"></div>
-          <div className="absolute bottom-12 left-12 right-12">
+          <div className="absolute bottom-8 left-8 right-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
             >
-              <h2 className="text-4xl font-black text-[var(--text-primary)] mb-4 leading-tight">Precision Vision <br/><span className="text-cyan-400">Powered by AI</span></h2>
-              <p className="text-[var(--text-secondary)] text-lg">The next generation of optical ERP and automated eye diagnosis systems.</p>
+              <h2 className="text-2xl font-black text-[var(--text-primary)] mb-2 leading-tight">Precision Vision <br/><span className="text-cyan-400">Powered by AI</span></h2>
+              <p className="text-[var(--text-secondary)] text-sm">The next generation of optical ERP and automated eye diagnosis systems.</p>
             </motion.div>
           </div>
         </div>
 
         {/* Right Side - Form */}
-        <div className="w-full lg:w-1/2 p-8 md:p-16 flex flex-col justify-center">
+        <div className="w-full lg:w-1/2 p-4 md:p-6 flex flex-col">
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <div className="mb-10">
-              <div className="w-14 h-14 gradient-bg rounded-2xl flex items-center justify-center mb-6 shadow-2xl shadow-cyan-500/20">
-                <Eye className="text-white w-8 h-8" />
+            {(isForgotPassword || isRegistering) && (
+              <div className="mb-2">
+                <h1 className="text-xl font-bold tracking-tight gradient-text">
+                  {isForgotPassword ? "Reset Password" : "Create Account"}
+                </h1>
               </div>
-              <h1 className="text-3xl font-bold tracking-tight mb-2 gradient-text">
-                {isForgotPassword ? "Reset Password" : (isRegistering ? "Create Account" : "AI Based Eye Power Detection")}
-              </h1>
-              <p className="text-slate-400">
-                {isForgotPassword ? "Enter your email to receive a reset link" : (isRegistering ? "Join our eye care platform" : "Optical Shop & Eye Diagnosis ERP")}
-              </p>
-            </div>
+            )}
 
             {error && (
-              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm mb-6 flex items-center gap-3">
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-sm mb-4 flex items-center gap-3">
                 <ShieldCheck className="w-5 h-5 flex-shrink-0" />
                 <div className="flex-1">{error}</div>
               </div>
@@ -328,16 +338,16 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
             )}
 
             {isForgotPassword ? (
-              <form onSubmit={handleForgotPassword} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 ml-1">Email Address</label>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 ml-0.5">Email Address</label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input 
                       type="email" 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                       placeholder="name@company.com"
                       required
                     />
@@ -347,7 +357,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                 <button 
                   type="submit" 
                   disabled={loading}
-                  className="w-full gradient-bg py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full gradient-bg py-3 rounded-2xl font-bold flex items-center justify-center gap-2 group hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -375,36 +385,36 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
               </form>
             ) : (
               <>
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-3">
               <button 
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white text-slate-900 rounded-2xl font-bold hover:bg-slate-100 transition-all disabled:opacity-50 mb-4"
+                className="w-full flex items-center justify-center gap-3 py-2 px-4 bg-white text-slate-900 rounded-2xl font-bold hover:bg-slate-100 transition-all disabled:opacity-50 mb-2"
               >
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
                 Continue with Google
               </button>
 
-              <div className="relative flex items-center gap-4 my-6">
+              <div className="relative flex items-center gap-4 my-2">
                 <div className="flex-1 h-px bg-white/10"></div>
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Or with Email</span>
                 <div className="flex-1 h-px bg-white/10"></div>
               </div>
 
               {!isRegistering && (
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-2 mb-2">
                   <button 
                     type="button"
                     onClick={() => { setEmail("admin@eyepower.ai"); setPassword("admin@123"); }}
-                    className="flex-1 py-2 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-cyan-500/10 hover:text-cyan-400 transition-all"
+                    className="flex-1 py-1 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-cyan-500/10 hover:text-cyan-400 transition-all"
                   >
                     Admin
                   </button>
                   <button 
                     type="button"
                     onClick={() => { setEmail("patient@eyepower.ai"); setPassword("Patient@123"); }}
-                    className="flex-1 py-2 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
+                    className="flex-1 py-1 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
                   >
                     Patient
                   </button>
@@ -412,15 +422,15 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
               )}
 
               {isRegistering && (
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 ml-1">Full Name</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 ml-0.5">Full Name</label>
                   <div className="relative">
                     <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input 
                       type="text" 
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-2 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                       placeholder="John Doe"
                       required
                     />
@@ -428,30 +438,30 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 ml-1">Email Address</label>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 ml-0.5">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input 
                     type="email" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-2 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                     placeholder="name@company.com"
                     required
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 ml-1">Password</label>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 ml-0.5">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input 
                     type={showPassword ? "text" : "password"} 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl py-4 pl-12 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-2 pl-12 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                     placeholder="••••••••"
                     required
                   />
@@ -505,7 +515,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
               <button 
                 type="submit" 
                 disabled={loading || (isRegistering && !isPasswordValid)}
-                className="w-full gradient-bg py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full gradient-bg py-2 rounded-xl font-bold flex items-center justify-center gap-2 group hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -518,7 +528,7 @@ export default function Login({ onLogin, theme, toggleTheme }: LoginProps) {
               </button>
             </form>
 
-            <div className="mt-10 text-center text-sm text-slate-500">
+            <div className="mt-2 text-center text-sm text-slate-500">
               {isRegistering ? (
                 <>
                   Already have an account?{" "}

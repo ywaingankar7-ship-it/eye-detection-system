@@ -90,9 +90,26 @@ const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
+// Middleware to generate a unique upload ID for each request
+const uploadIdMiddleware = (req: any, res: any, next: any) => {
+  req.uploadId = Date.now().toString();
+  next();
+};
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+  destination: (req: any, file, cb) => {
+    // Use the uploadId from the request to ensure all files in the same
+    // request go to the same subdirectory, supporting .gltf relative paths.
+    const subDir = path.join(uploadDir, req.uploadId || Date.now().toString());
+    if (!fs.existsSync(subDir)) {
+      fs.mkdirSync(subDir, { recursive: true });
+    }
+    cb(null, subDir);
+  },
+  filename: (req, file, cb) => {
+    // Keep original filename to preserve relative links in .gltf files
+    cb(null, file.originalname);
+  },
 });
 const upload = multer({ storage });
 
@@ -105,11 +122,25 @@ app.get("/uploads/*", (req, res) => {
 
 // --- API ROUTES ---
 
-// File Upload (Still used by Inventory.tsx)
-app.post("/api/upload", upload.single("file"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-  const url = `/uploads/${req.file.filename}`;
-  res.json({ url });
+// File Upload (Supports multiple files for .gltf dependencies)
+app.post("/api/upload", uploadIdMiddleware, upload.array("files"), (req, res) => {
+  const files = req.files as Express.Multer.File[];
+  if (!files || files.length === 0) return res.status(400).json({ error: "No files uploaded" });
+  
+  // All files in this request are stored in the same subdirectory
+  // We return the URL of the first file (usually the main model file)
+  // and the base directory URL
+  const mainFile = files[0];
+  const relativePath = path.relative(uploadDir, mainFile.path);
+  const url = `/uploads/${relativePath.replace(/\\/g, '/')}`;
+  
+  res.json({ 
+    url,
+    files: files.map(f => ({
+      name: f.originalname,
+      url: `/uploads/${path.relative(uploadDir, f.path).replace(/\\/g, '/')}`
+    }))
+  });
 });
 
 // Migration Routes (Read from legacy SQLite)

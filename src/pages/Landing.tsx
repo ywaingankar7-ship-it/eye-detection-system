@@ -45,7 +45,7 @@ const FeatureCard = ({
     <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
       <Icon className="w-6 h-6 text-cyan-400" />
     </div>
-    <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
+    <h3 className="text-xl font-bold text-[var(--text-primary)] mb-3">{title}</h3>
     <p className="text-slate-400 leading-relaxed">{description}</p>
   </motion.div>
 );
@@ -69,14 +69,14 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
             
             <button 
               onClick={toggleTheme}
-              className="p-2 text-slate-500 hover:text-cyan-400 hover:bg-white/5 rounded-xl transition-all"
+              className="p-2 text-slate-500 hover:text-cyan-400 hover:bg-[var(--card-hover)] rounded-xl transition-all"
               title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
             >
               {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
             {user ? (
-              <Link to="/dashboard" className="px-6 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all">
+              <Link to="/dashboard" className="px-6 py-2 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] text-[var(--text-primary)] font-bold hover:bg-[var(--card-hover)] transition-all">
                 Dashboard
               </Link>
             ) : (
@@ -98,101 +98,95 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
         </div>
 
         <div className="container mx-auto px-6 relative z-10">
-          <div className="max-w-4xl mx-auto text-center">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-cyan-400 text-xs font-bold uppercase tracking-widest mb-8"
-            >
-              <Sparkles className="w-4 h-4" /> The Future of Eyewear is Here
-            </motion.div>
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left Section: Name and Description */}
+            <div className="text-left">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8 }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--glass-bg)] border border-[var(--glass-border)] text-cyan-400 text-xs font-bold uppercase tracking-widest mt-[15px] mx-[5px] mb-5"
+              >
+                <Sparkles className="w-4 h-4" /> The Future of Eyewear is Here
+              </motion.div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="text-6xl md:text-8xl font-black text-[var(--text-primary)] tracking-tighter mb-8 leading-[0.9]"
-            >
-              EYE POWER <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">DETECTION</span> REIMAGINED.
-            </motion.h1>
+              <motion.h1
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="text-4xl md:text-6xl font-black text-[var(--text-primary)] tracking-tighter mb-5 leading-[1.1]"
+              >
+                EYE POWER <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 uppercase">Detection</span> <br />
+                REIMAGINED.
+              </motion.h1>
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              className="text-xl text-slate-500 mb-12 max-w-2xl mx-auto leading-relaxed"
-            >
-              Experience the world's first AI-powered eye power detection platform. 
-              Virtual try-ons, precision eye tests, and premium eyewear curated just for you.
-            </motion.p>
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+                className="text-lg text-slate-500 mb-5 max-w-xl leading-relaxed"
+              >
+                Experience the world's first AI-powered eye power detection platform. 
+                Virtual try-ons, precision eye tests, and premium eyewear curated just for you.
+              </motion.p>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
-              className="flex flex-col items-center justify-center gap-6"
-            >
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
+                className="flex flex-col sm:flex-row gap-4"
+              >
                 <Link 
-                  to="/inventory"
-                  className="w-full sm:w-auto px-8 py-4 bg-white/5 border border-white/10 rounded-2xl font-bold text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2 group"
+                  to={user ? "/dashboard" : "/login"}
+                  className="px-8 py-4 gradient-bg rounded-2xl font-bold text-white shadow-xl shadow-cyan-500/20 hover:scale-105 transition-all flex items-center gap-2 group"
                 >
-                  <ShoppingCart className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" /> My Cart
+                  Patient Portal <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link 
                   to="/appointments"
-                  className="w-full sm:w-auto px-8 py-4 bg-white/5 border border-white/10 rounded-2xl font-bold text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2 group"
+                  className="px-8 py-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl font-bold text-[var(--text-primary)] hover:bg-[var(--card-hover)] transition-all flex items-center gap-2"
                 >
-                  <Calendar className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" /> Book Appointment
+                  Book Appointment
                 </Link>
-              </div>
-              
-              <Link 
-                to={user ? "/dashboard" : "/login"}
-                className="w-full max-w-lg px-12 py-8 gradient-bg rounded-[2.5rem] font-black text-4xl text-white shadow-2xl shadow-cyan-500/40 hover:scale-105 active:scale-95 transition-all flex flex-col items-center justify-center gap-2 group uppercase tracking-tighter"
-              >
-                <span className="text-sm font-bold tracking-[0.3em] text-cyan-200 opacity-80 mb-1">Access Your Account</span>
-                <div className="flex items-center gap-4">
-                  Patient Portal <ArrowRight className="w-10 h-10 group-hover:translate-x-3 transition-transform" />
+              </motion.div>
+            </div>
+
+            {/* Right Section: Visual Image */}
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 1, delay: 0.6 }}
+              className="relative"
+            >
+              <div className="relative aspect-[16/10] rounded-[32px] overflow-hidden shadow-[0_20px_80px_-15px_rgba(34,211,238,0.3)] border border-[var(--glass-border)] group">
+                <img 
+                  src="../image/image.png" 
+                  alt="AI Eye Diagnosis" 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)]/40 via-transparent to-transparent"></div>
+                
+                {/* Overlay Stats */}
+                <div className="absolute bottom-4 left-4 right-4 flex gap-3">
+                  <div className="glass-card p-2.5 flex-1 backdrop-blur-md bg-white/5 border-white/10">
+                    <p className="text-[7px] font-bold text-cyan-400 uppercase tracking-widest mb-0.5">AI Precision</p>
+                    <p className="text-xs font-black">99.8%</p>
+                  </div>
+                  <div className="glass-card p-2.5 flex-1 backdrop-blur-md bg-white/5 border-white/10">
+                    <p className="text-[7px] font-bold text-purple-400 uppercase tracking-widest mb-0.5">AR Engine</p>
+                    <p className="text-xs font-black">Real-time</p>
+                  </div>
                 </div>
-              </Link>
+              </div>
+
+              {/* Decorative Elements */}
+              <div className="absolute -top-4 -right-4 w-20 h-20 bg-cyan-500/20 blur-3xl rounded-full animate-pulse"></div>
+              <div className="absolute -bottom-4 -left-4 w-24 h-24 bg-purple-500/20 blur-3xl rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
             </motion.div>
           </div>
         </div>
-
-        {/* Floating Elements */}
-        <motion.div 
-          animate={{ y: [0, -20, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/4 left-10 hidden xl:block"
-        >
-          <div className="glass-card p-4 flex items-center gap-4 border-cyan-500/20">
-            <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
-              <Zap className="w-5 h-5 text-cyan-400" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AI Accuracy</p>
-              <p className="text-sm font-black text-white">99.8% Precision</p>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          animate={{ y: [0, 20, 0] }}
-          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          className="absolute bottom-1/4 right-10 hidden xl:block"
-        >
-          <div className="glass-card p-4 flex items-center gap-4 border-purple-500/20">
-            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-              <Camera className="w-5 h-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AR Engine</p>
-              <p className="text-sm font-black text-white">Real-time Tracking</p>
-            </div>
-          </div>
-        </motion.div>
       </section>
 
       {/* Features Section */}
@@ -208,7 +202,7 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <div id="tech" className="h-px w-24 bg-white/10 hidden lg:block" />
+              <div id="tech" className="h-px w-24 bg-[var(--glass-border)] hidden lg:block" />
               <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.3em]">Our Core Tech</span>
             </div>
           </div>
@@ -262,7 +256,7 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
       </section>
 
       {/* Footer */}
-      <footer className="py-20 border-t border-white/5">
+      <footer className="py-20 border-t border-[var(--glass-border)]">
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-8">
             <div className="flex items-center gap-3">
@@ -275,8 +269,8 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
               © 2026 AI Based Eye Power Detection System. All rights reserved.
             </p>
             <div className="flex items-center gap-8">
-              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest">Privacy</a>
-              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest">Terms</a>
+              <a href="#" className="text-slate-400 hover:text-[var(--text-primary)] transition-colors text-sm font-bold uppercase tracking-widest">Privacy</a>
+              <a href="#" className="text-slate-400 hover:text-[var(--text-primary)] transition-colors text-sm font-bold uppercase tracking-widest">Terms</a>
             </div>
           </div>
         </div>

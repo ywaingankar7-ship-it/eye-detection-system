@@ -128,11 +128,10 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    testConnection();
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("Auth state changed:", firebaseUser?.email);
       if (firebaseUser) {
+        testConnection(); // Test connection after auth is ready
         try {
           const docRef = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);

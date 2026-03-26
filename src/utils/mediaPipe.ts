@@ -11,13 +11,6 @@ export const getFaceLandmarker = async (): Promise<FaceLandmarker | null> => {
   isInitializing = true;
   initializationPromise = (async () => {
     try {
-      // Suppress MediaPipe info logs
-      const originalInfo = console.info;
-      console.info = (...args) => {
-        if (typeof args[0] === 'string' && args[0].includes('XNNPACK delegate')) return;
-        originalInfo.apply(console, args);
-      };
-
       const vision = await FilesetResolver.forVisionTasks(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
       );
@@ -34,7 +27,6 @@ export const getFaceLandmarker = async (): Promise<FaceLandmarker | null> => {
       });
 
       faceLandmarkerInstance = landmarker;
-      console.info = originalInfo;
       return landmarker;
     } catch (err) {
       console.error("Failed to initialize FaceLandmarker singleton:", err);

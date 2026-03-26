@@ -23,9 +23,120 @@ import { InventoryItem } from "../types";
 import { cn } from "../lib/utils";
 import { FaceLandmarker } from "@mediapipe/tasks-vision";
 import { getFaceLandmarker } from "../utils/mediaPipe";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { GoogleGenAI } from "@google/genai";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, PerspectiveCamera, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
+
+// --- ADVANCED AR COMPONENTS ---
+
+/**
+ * DynamicEnvironment: Uses the webcam feed as a real-time environment map
+ * for realistic reflections on the glasses.
+ */
+function DynamicEnvironment({ webcamRef }: { webcamRef: React.RefObject<Webcam> }) {
+  const { scene } = useThree();
+  
+  useFrame(() => {
+    if (webcamRef.current && webcamRef.current.video) {
+      const video = webcamRef.current.video;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // We create a video texture from the webcam
+        const texture = new THREE.VideoTexture(video);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        scene.environment = texture;
+      }
+    }
+  });
+
+  return null;
+}
+
+/**
+ * OccluderHead: Renders an invisible head mesh that hides the arms of the glasses
+ * when they go behind the user's head.
+ */
+function OccluderHead({ arDataRef }: { arDataRef: React.RefObject<any> }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  useFrame(() => {
+    if (meshRef.current && arDataRef.current && arDataRef.current.visible) {
+      if (arDataRef.current.matrix) {
+        const matrix = new THREE.Matrix4().fromArray(arDataRef.current.matrix);
+        const position = new THREE.Vector3();
+        const quaternion = new THREE.Quaternion();
+        const scale = new THREE.Vector3();
+        matrix.decompose(position, quaternion, scale);
+
+        // Adjust position slightly to center the head
+        meshRef.current.position.set(position.x, position.y - 0.2, position.z + 4.8);
+        meshRef.current.quaternion.copy(quaternion);
+        meshRef.current.scale.set(0.85, 1.0, 0.85); // Approximate head size
+      }
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} visible={arDataRef.current?.visible || false}>
+      <sphereGeometry args={[10, 32, 32]} />
+      <meshBasicMaterial colorWrite={false} />
+    </mesh>
+  );
+}
+
+/**
+ * LightEstimator: Analyzes the webcam feed to adjust the scene lighting
+ */
+function LightEstimator({ webcamRef }: { webcamRef: React.RefObject<Webcam> }) {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'));
+
+  useFrame(() => {
+    if (webcamRef.current && webcamRef.current.video && lightRef.current) {
+      const video = webcamRef.current.video;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          canvas.width = 16;
+          canvas.height = 16;
+          ctx.drawImage(video, 0, 0, 16, 16);
+          const data = ctx.getImageData(0, 0, 16, 16).data;
+          
+          let totalBrightness = 0;
+          let leftBrightness = 0;
+          let rightBrightness = 0;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i+1];
+            const b = data[i+2];
+            const brightness = (r + g + b) / 3;
+            totalBrightness += brightness;
+
+            const pixelIndex = i / 4;
+            const x = pixelIndex % 16;
+            if (x < 8) leftBrightness += brightness;
+            else rightBrightness += brightness;
+          }
+
+          const avgBrightness = totalBrightness / (16 * 16 * 255);
+          lightRef.current.intensity = 0.5 + avgBrightness * 1.5;
+          
+          // Move light based on where the room is brighter
+          if (leftBrightness > rightBrightness) {
+            lightRef.current.position.set(-10, 10, 10);
+          } else {
+            lightRef.current.position.set(10, 10, 10);
+          }
+        }
+      }
+    }
+  });
+
+  return <directionalLight ref={lightRef} position={[10, 10, 10]} intensity={1} />;
+}
 
 function GlassesModel({ url, arDataRef, manualOffset, baseScale = 1.0 }: { url: string, arDataRef: React.RefObject<any>, manualOffset: any, baseScale?: number }) {
   // Ensure the URL is absolute for the loader
@@ -78,29 +189,11 @@ function GlassesModel({ url, arDataRef, manualOffset, baseScale = 1.0 }: { url: 
   );
 }
 
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 
-// Local Error Boundary for 3D Model
-class ModelErrorBoundary extends React.Component<{ children: React.ReactNode, fallback: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: React.ReactNode, fallback: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: any) {
-    console.error("Model loading failed:", error);
-  }
-
-  render() {
-    if (this.state.hasError) return this.props.fallback;
-    return this.props.children;
-  }
-}
+import { ModelErrorBoundary } from "../components/ModelErrorBoundary";
 
 export default function VirtualTryOn() {
   const [frames, setFrames] = useState<InventoryItem[]>([]);
@@ -113,6 +206,9 @@ export default function VirtualTryOn() {
   const [isValidatingModel, setIsValidatingModel] = useState(false);
   
   const [vtoActive, setVtoActive] = useState(false);
+  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
   
   // AR Data Ref for 3D model (no re-renders)
   const arDataRef = useRef<{
@@ -161,19 +257,26 @@ export default function VirtualTryOn() {
       if (landmarker) setFaceLandmarker(landmarker);
     };
 
-    const unsub = onSnapshot(collection(db, "inventory"), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
-      const frameItems = items.filter(i => i.type === 'frame' || i.type === 'sunglasses');
-      setFrames(frameItems);
-      if (frameItems.length > 0 && !selectedFrame) setSelectedFrame(frameItems[0]);
-      setLoading(false);
-    }, (err) => {
-      console.error("Failed to fetch inventory", err);
-      setLoading(false);
+    // Wait for auth to be fully initialized
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!firebaseUser) return;
+
+      const unsub = onSnapshot(collection(db, "inventory"), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
+        const frameItems = items.filter(i => i.type === 'frame' || i.type === 'sunglasses');
+        setFrames(frameItems);
+        if (frameItems.length > 0 && !selectedFrame) setSelectedFrame(frameItems[0]);
+        setLoading(false);
+      }, (err) => {
+        console.error("Failed to fetch inventory", err);
+        setLoading(false);
+      });
+
+      return () => unsub();
     });
 
     initFaceLandmarker();
-    return () => unsub();
+    return () => unsubscribeAuth();
   }, [selectedFrame]);
 
   // Validate model URL before trying to load it in 3D
@@ -186,6 +289,9 @@ export default function VirtualTryOn() {
         
       fetch(fullUrl, { method: 'HEAD' })
         .then(res => {
+          if (res.ok && selectedFrame.model_url?.toLowerCase().endsWith('.gltf')) {
+            console.warn("GLTF model detected. These often fail if external assets are missing. Recommend using .glb");
+          }
           setIsModelValid(res.ok);
           setIsValidatingModel(false);
         })
@@ -278,6 +384,50 @@ export default function VirtualTryOn() {
       link.href = imageSrc;
       link.download = "eyepower-try-on.png";
       link.click();
+    }
+  };
+
+  const askAiStylist = async () => {
+    if (!webcamRef.current || !selectedFrame) return;
+    
+    setIsAiLoading(true);
+    setShowAiModal(true);
+    setAiAdvice(null);
+
+    try {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) throw new Error("Could not capture screenshot");
+
+      // Extract base64 data
+      const base64Data = imageSrc.split(',')[1];
+
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          {
+            parts: [
+              { text: `You are a professional optical stylist. Analyze this person wearing the ${selectedFrame.brand} ${selectedFrame.model} glasses. 
+              Consider their face shape, skin tone, and the frame style. 
+              Provide a professional critique and styling advice in 3-4 concise sentences. 
+              Be encouraging but honest about the fit and color match.` },
+              {
+                inlineData: {
+                  mimeType: "image/png",
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ]
+      });
+
+      setAiAdvice(response.text || "I'm sorry, I couldn't analyze the image. You look great though!");
+    } catch (error) {
+      console.error("AI Stylist Error:", error);
+      setAiAdvice("The AI Stylist is currently busy assisting other customers. Please try again in a moment.");
+    } finally {
+      setIsAiLoading(false);
     }
   };
 
@@ -402,11 +552,23 @@ export default function VirtualTryOn() {
             {/* AR Overlay (2D or 3D) */}
             <div className="absolute inset-0 pointer-events-none z-30">
               {selectedFrame?.model_url && isModelValid !== false ? (
-                <ModelErrorBoundary fallback={
+                <ModelErrorBoundary 
+                  modelUrl={selectedFrame.model_url}
+                  fallback={
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-2xl text-xs font-bold flex flex-col items-center gap-2 pointer-events-auto">
-                      <AlertCircle className="w-6 h-6" />
-                      3D Model Missing - Using 2D Fallback
+                    <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-6 rounded-3xl text-xs font-bold flex flex-col items-center gap-3 pointer-events-auto max-w-[250px] text-center backdrop-blur-md">
+                      <AlertCircle className="w-8 h-8" />
+                      <div>
+                        <p className="mb-1">3D Model Loading Failed</p>
+                        <p className="text-[10px] opacity-70 font-normal">
+                          {selectedFrame.model_url?.toLowerCase().endsWith('.gltf') 
+                            ? "This .gltf model may be missing its .bin or texture files. Try using a .glb file."
+                            : "The 3D asset could not be loaded or is corrupted."}
+                        </p>
+                      </div>
+                      <div className="mt-2 px-3 py-1 bg-rose-500/20 rounded-full">
+                        Using 2D Fallback
+                      </div>
                     </div>
                     {/* 2D Fallback Image */}
                     <AnimatePresence>
@@ -448,11 +610,13 @@ export default function VirtualTryOn() {
                       </div>
                     </div>
                   ) : (
-                    <Canvas>
+                    <Canvas gl={{ preserveDrawingBuffer: true }}>
                       <PerspectiveCamera makeDefault position={[0, 0, 10]} />
                       <Suspense fallback={null}>
-                        <Environment preset="city" />
+                        <DynamicEnvironment webcamRef={webcamRef} />
+                        <LightEstimator webcamRef={webcamRef} />
                         <group scale={[-1, 1, 1]}>
+                          <OccluderHead arDataRef={arDataRef} />
                           <GlassesModel 
                             url={selectedFrame.model_url} 
                             arDataRef={arDataRef} 
@@ -463,7 +627,6 @@ export default function VirtualTryOn() {
                         <ContactShadows opacity={0.5} scale={10} blur={1} far={10} resolution={256} color="#000000" />
                       </Suspense>
                       <ambientLight intensity={0.5} />
-                      <pointLight position={[10, 10, 10]} />
                     </Canvas>
                   )}
                 </ModelErrorBoundary>
@@ -509,6 +672,16 @@ export default function VirtualTryOn() {
               >
                 <Minimize2 className="w-5 h-5" />
               </button>
+              
+              <button 
+                onClick={askAiStylist}
+                className="p-4 rounded-2xl bg-indigo-500/80 backdrop-blur-md border border-indigo-500/20 text-white hover:bg-indigo-500 transition-all shadow-lg flex items-center gap-2"
+                title="AI Stylist Advice"
+              >
+                <Zap className="w-5 h-5 text-amber-400" />
+                <span className="text-xs font-bold uppercase tracking-widest hidden sm:inline">AI Stylist</span>
+              </button>
+
               <button 
                 onClick={handleCapture}
                 className="w-16 h-16 rounded-full gradient-bg flex items-center justify-center text-white shadow-2xl shadow-cyan-500/40 hover:scale-110 active:scale-95 transition-all"
@@ -516,6 +689,7 @@ export default function VirtualTryOn() {
               >
                 <Camera className="w-8 h-8" />
               </button>
+
               <button 
                 onClick={() => setManualOffset(prev => ({ ...prev, scale: prev.scale + 0.05 }))}
                 className="p-3 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-white/10 text-white hover:bg-white/10 transition-all"
@@ -651,6 +825,74 @@ export default function VirtualTryOn() {
           </div>
         </div>
       </div>
+      {/* AI Stylist Modal */}
+      <AnimatePresence>
+        {showAiModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAiModal(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg glass-card overflow-hidden shadow-2xl border-indigo-500/30"
+            >
+              <div className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <Zap className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white">AI Stylist Advice</h3>
+                  </div>
+                  <button 
+                    onClick={() => setShowAiModal(false)}
+                    className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {isAiLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-4">
+                      <div className="relative">
+                        <div className="w-16 h-16 border-4 border-indigo-500/20 rounded-full"></div>
+                        <div className="absolute inset-0 w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                      <p className="text-slate-400 animate-pulse">Analyzing your style...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-6 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 text-slate-300 leading-relaxed italic">
+                        "{aiAdvice}"
+                      </div>
+                      <div className="flex items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <p className="text-xs text-slate-400">
+                          This advice is generated by AI based on your current facial landmarks and frame selection.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <button 
+                    onClick={() => setShowAiModal(false)}
+                    className="w-full py-4 gradient-bg rounded-xl font-bold text-white shadow-lg shadow-indigo-500/20 hover:scale-[1.02] transition-all"
+                  >
+                    Got it, thanks!
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

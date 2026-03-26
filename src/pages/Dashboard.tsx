@@ -29,6 +29,7 @@ import { migrateData } from "../services/migrationService";
 import { useNavigate } from "react-router-dom";
 
 import { db, auth } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { 
   collection, 
   onSnapshot, 
@@ -64,67 +65,77 @@ export default function Dashboard() {
       setUser(savedUser);
     }
 
-    if (!auth.currentUser && !savedUser) {
-      navigate("/login");
-      return;
-    }
-
-    if (!savedUser) return;
-
-    // Real-time stats from Firestore
-    const unsubscribers: (() => void)[] = [];
-
-    // Simple count listeners
-    const fetchStats = async () => {
-      try {
-        const isStaff = savedUser.role === 'admin' || savedUser.role === 'staff';
-        
-        const statsPromises: any = {
-          aiTests: getCountFromServer(collection(db, "eye_tests")),
-          appointmentsToday: getCountFromServer(query(collection(db, "appointments"), where("date", "==", new Date().toISOString().split('T')[0]))),
-          lowStock: getCountFromServer(query(collection(db, "inventory"), where("stock", "<", 5)))
-        };
-
-        if (isStaff) {
-          statsPromises.totalCustomers = getCountFromServer(collection(db, "customers"));
-        }
-
-        const results = await Promise.all(Object.entries(statsPromises).map(async ([key, promise]: [string, any]) => {
-          try {
-            const snap = await promise;
-            return [key, snap.data().count];
-          } catch (err) {
-            console.error(`Error fetching ${key} count:`, err);
-            return [key, 0];
-          }
-        }));
-
-        const newStats = Object.fromEntries(results);
-        setStats((prev: any) => ({ ...prev, ...newStats }));
-      } catch (err) {
-        console.error("Error fetching stats:", err);
+    // Wait for auth to be fully initialized
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!firebaseUser && !savedUser) {
+        navigate("/login");
+        return;
       }
-    };
 
-    fetchStats();
+      if (!firebaseUser) return;
 
-    // Activities listener - only for staff
-    if (savedUser.role === 'admin' || savedUser.role === 'staff') {
-      const activitiesQuery = query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(10));
-      const unsubActivities = onSnapshot(activitiesQuery, (snapshot) => {
-        const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setActivities(logs);
+      // Real-time stats from Firestore
+      const unsubscribers: (() => void)[] = [];
+
+      // Simple count listeners
+      const fetchStats = async () => {
+        try {
+          const isStaff = savedUser.role === 'admin' || savedUser.role === 'staff';
+          
+          const statsPromises: any = {
+            aiTests: getCountFromServer(collection(db, "eye_tests")),
+            appointmentsToday: getCountFromServer(query(collection(db, "appointments"), where("date", "==", new Date().toISOString().split('T')[0]))),
+          };
+
+          if (isStaff) {
+            statsPromises.totalCustomers = getCountFromServer(collection(db, "customers"));
+            statsPromises.lowStock = getCountFromServer(query(collection(db, "inventory"), where("stock", "<", 5)));
+          }
+
+          const results = await Promise.all(Object.entries(statsPromises).map(async ([key, promise]: [string, any]) => {
+            try {
+              const snap = await promise;
+              return [key, snap.data().count];
+            } catch (err) {
+              console.warn(`Permission or fetch error for ${key} count:`, err);
+              return [key, 0];
+            }
+          }));
+
+          const newStats = Object.fromEntries(results);
+          setStats((prev: any) => ({ ...prev, ...newStats }));
+        } catch (err) {
+          console.error("Error fetching stats:", err);
+        }
+      };
+
+      fetchStats();
+
+      // Activities listener - only for staff
+      if (savedUser.role === 'admin' || savedUser.role === 'staff') {
+        const activitiesQuery = query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(10));
+        const unsubActivities = onSnapshot(activitiesQuery, (snapshot) => {
+          const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setActivities(logs);
+          setLoading(false);
+        }, (err) => {
+          if (err.message.includes("permissions")) {
+            console.warn("User does not have permission to view activity logs.");
+            setActivities([]);
+          } else {
+            handleFirestoreError(err, OperationType.GET, "activity_logs");
+          }
+          setLoading(false);
+        });
+        unsubscribers.push(unsubActivities);
+      } else {
         setLoading(false);
-      }, (err) => {
-        console.error("Activities error:", err);
-        setLoading(false);
-      });
-      unsubscribers.push(unsubActivities);
-    } else {
-      setLoading(false);
-    }
+      }
 
-    return () => unsubscribers.forEach(unsub => unsub());
+      return () => unsubscribers.forEach(unsub => unsub());
+    });
+
+    return () => unsubscribeAuth();
   }, [navigate]);
 
   if (loading || !user) return <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
@@ -245,7 +256,7 @@ export default function Dashboard() {
           )}
           <button 
             onClick={handleExport}
-            className="glass px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/10 transition-all"
+            className="glass px-4 py-2 rounded-xl text-sm font-medium hover:bg-[var(--card-hover)] transition-all"
           >
             Export Report
           </button>
@@ -301,7 +312,7 @@ export default function Dashboard() {
           <div className="flex-1 text-center md:text-left">
             <h2 className="text-3xl font-black mb-2 tracking-tight">AI Based Eye Power <span className="text-cyan-400">Detection</span></h2>
             <p className="text-slate-300 text-lg max-w-2xl leading-relaxed">
-              Welcome to your advanced clinical command center. We've analyzed <span className="text-white font-bold">{stats.aiTests}</span> cases this month with clinical-grade precision.
+              Welcome to your advanced clinical command center. We've analyzed <span className="text-[var(--text-primary)] font-bold">{stats.aiTests}</span> cases this month with clinical-grade precision.
             </p>
             <div className="flex flex-wrap gap-4 mt-6 justify-center md:justify-start">
               <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
@@ -418,7 +429,7 @@ export default function Dashboard() {
           </div>
           <button 
             onClick={() => navigate('/notifications')}
-            className="w-full mt-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-semibold transition-all"
+            className="w-full mt-6 py-3 bg-[var(--glass-bg)] hover:bg-[var(--card-hover)] rounded-xl text-sm font-semibold transition-all"
           >
             View All Notifications
           </button>
@@ -429,13 +440,13 @@ export default function Dashboard() {
         <h3 className="font-bold text-lg mb-6">Recent Activity</h3>
         <div className="space-y-4">
           {activities.slice(0, 5).map((activity, i) => (
-            <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+            <div key={i} className="flex items-center justify-between p-4 bg-[var(--glass-bg)] rounded-xl border border-[var(--glass-border)]">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 font-bold">
                   {activity.user_name?.charAt(0) || "U"}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">{activity.user_name} <span className="text-slate-400 font-normal">{activity.action}</span></p>
+                  <p className="text-sm font-bold text-[var(--text-primary)]">{activity.user_name} <span className="text-slate-400 font-normal">{activity.action}</span></p>
                   <p className="text-xs text-slate-500">{activity.details}</p>
                 </div>
               </div>
