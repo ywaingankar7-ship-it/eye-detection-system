@@ -46,8 +46,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<any>({
     totalCustomers: 0,
     aiTests: 0,
-    appointmentsToday: 0,
-    lowStock: 0
+    appointmentsToday: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +88,6 @@ export default function Dashboard() {
 
           if (isStaff) {
             statsPromises.totalCustomers = getCountFromServer(collection(db, "customers"));
-            statsPromises.lowStock = getCountFromServer(query(collection(db, "inventory"), where("stock", "<", 5)));
           }
 
           const results = await Promise.all(Object.entries(statsPromises).map(async ([key, promise]: [string, any]) => {
@@ -412,12 +410,6 @@ export default function Dashboard() {
             System Alerts
           </h3>
           <div className="space-y-4 flex-1 overflow-auto pr-2">
-            {stats.lowStock > 0 && (
-              <div className="p-4 bg-amber-400/5 border border-amber-400/20 rounded-xl">
-                <p className="text-sm font-bold text-amber-400 mb-1">Low Stock Alert</p>
-                <p className="text-xs text-slate-400">{stats.lowStock} items are running low on stock. Please restock soon.</p>
-              </div>
-            )}
             <div className="p-4 bg-cyan-400/5 border border-cyan-400/20 rounded-xl">
               <p className="text-sm font-bold text-cyan-400 mb-1">New Appointment</p>
               <p className="text-xs text-slate-400">You have {stats.appointmentsToday} appointments scheduled for today.</p>

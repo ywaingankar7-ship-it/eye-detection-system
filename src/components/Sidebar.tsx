@@ -3,15 +3,13 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
   Users, 
-  Package, 
   Calendar, 
   Eye, 
   LogOut,
   ChevronRight,
   ChevronLeft,
   Menu,
-  FileText,
-  Camera
+  FileText
 } from "lucide-react";
 import { User } from "../types";
 import { motion, AnimatePresence } from "motion/react";
@@ -27,10 +25,8 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Users, label: "Customers", path: "/customers" },
   { icon: FileText, label: "Prescriptions", path: "/prescriptions" },
-  { icon: Package, label: "Inventory", path: "/inventory" },
   { icon: Calendar, label: "Appointments", path: "/appointments" },
   { icon: Eye, label: "AI Eye Test", path: "/ai-test" },
-  { icon: Camera, label: "Virtual Try-On", path: "/try-on" },
   { icon: LayoutDashboard, label: "Analytics", path: "/analytics" },
 ];
 
@@ -44,7 +40,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, setIsCollapsed }:
       return item.path !== '/analytics' && item.path !== '/ai-test';
     } else {
       // Patient role
-      return ['/dashboard', '/appointments', '/ai-test', '/inventory', '/try-on'].includes(item.path);
+      return ['/dashboard', '/appointments', '/ai-test'].includes(item.path);
     }
   });
 

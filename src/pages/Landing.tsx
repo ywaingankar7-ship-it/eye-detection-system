@@ -5,14 +5,11 @@ import {
   Eye, 
   Shield, 
   ArrowRight, 
-  Camera, 
   Sparkles,
   ChevronRight,
-  ShoppingBag,
   Activity,
   Sun,
   Moon,
-  ShoppingCart,
   Calendar
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -128,7 +125,7 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
                 className="text-lg text-slate-500 mb-5 max-w-xl leading-relaxed"
               >
                 Experience the world's first AI-powered eye power detection platform. 
-                Virtual try-ons, precision eye tests, and premium eyewear curated just for you.
+                Precision eye tests and premium eyewear curated just for you.
               </motion.p>
 
               <motion.div
@@ -207,24 +204,18 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={Camera}
-              title="Virtual Try-On"
-              description="Our advanced AR engine tracks 468 facial landmarks in real-time for a perfect fit visualization."
-              delay={0.1}
-            />
+          <div className="grid md:grid-cols-2 gap-8">
             <FeatureCard 
               icon={Activity}
               title="AI Diagnostics"
               description="Get instant insights into your eye health and prescription needs using our proprietary vision models."
-              delay={0.2}
+              delay={0.1}
             />
             <FeatureCard 
-              icon={ShoppingBag}
-              title="Smart Inventory"
-              description="Browse a curated collection of premium frames with real-time stock and personalized recommendations."
-              delay={0.3}
+              icon={Shield}
+              title="Secure Records"
+              description="Your clinical data is encrypted and stored securely, accessible only to you and your healthcare provider."
+              delay={0.2}
             />
           </div>
         </div>
@@ -244,10 +235,10 @@ export default function Landing({ user, theme, toggleTheme }: { user: User | nul
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Link 
-                  to="/inventory"
+                  to="/appointments"
                   className="px-10 py-5 bg-white text-slate-900 rounded-2xl font-black hover:scale-105 transition-all flex items-center gap-3"
                 >
-                  Get Started Now <ChevronRight className="w-5 h-5" />
+                  Book Appointment Now <ChevronRight className="w-5 h-5" />
                 </Link>
               </div>
             </div>

@@ -40,6 +40,7 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{id: string, source: string, name: string} | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<any>(null);
   const [newCustomer, setNewCustomer] = useState({
@@ -58,9 +59,9 @@ export default function Customers() {
     const qCustomers = query(collection(db, "customers"));
     const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
       const customerData = snapshot.docs.map(doc => ({
+        ...doc.data(),
         id: doc.id,
-        source: 'customer',
-        ...doc.data()
+        source: 'customer'
       }));
       updateMergedList(customerData, 'customers');
     }, (error) => {
@@ -72,9 +73,9 @@ export default function Customers() {
     const qUsers = query(collection(db, "users"), where("role", "==", "patient"));
     const unsubUsers = onSnapshot(qUsers, (snapshot) => {
       const userData = snapshot.docs.map(doc => ({
+        ...doc.data(),
         id: doc.id,
-        source: 'user',
-        ...doc.data()
+        source: 'user'
       }));
       updateMergedList(userData, 'users');
     }, (error) => {
@@ -144,14 +145,19 @@ export default function Customers() {
     }
   };
 
-  const handleDeleteCustomer = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this customer?")) return;
+  const handleDeleteCustomer = async () => {
+    if (!deleteConfirm) return;
+    const { id, source } = deleteConfirm;
+    
     try {
-      await deleteDoc(doc(db, "customers", id));
-      await logActivity("Delete Customer", `Deleted customer ID: ${id}`);
+      const collectionName = source === 'user' ? "users" : "customers";
+      // Ensure ID is a string to prevent Firebase SDK errors
+      await deleteDoc(doc(db, collectionName, String(id)));
+      await logActivity("Delete Customer", `Deleted ${source} record: ${deleteConfirm.name} (ID: ${id})`);
+      setDeleteConfirm(null);
     } catch (err) {
       console.error("Failed to delete customer:", err);
-      handleFirestoreError(err, OperationType.DELETE, `customers/${id}`);
+      handleFirestoreError(err, OperationType.DELETE, `${source === 'user' ? 'users' : 'customers'}/${id}`);
     }
   };
 
@@ -347,6 +353,51 @@ export default function Customers() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDeleteConfirm(null)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md glass-card p-8 text-center space-y-6"
+            >
+              <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto">
+                <Trash2 className="w-10 h-10 text-rose-500" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold">Delete Record?</h2>
+                <p className="text-slate-400 mt-2">
+                  Are you sure you want to delete <strong>{deleteConfirm.name}</strong>? 
+                  This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 py-3 glass rounded-xl font-bold hover:bg-white/10 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleDeleteCustomer}
+                  className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 rounded-xl font-bold shadow-lg shadow-rose-500/20 transition-all"
+                >
+                  Delete Now
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="glass-card">
         <div className="p-6 border-b border-white/10">
           <div className="relative max-w-md">
@@ -377,7 +428,7 @@ export default function Customers() {
               >
                 <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                   <button 
-                    onClick={() => handleDeleteCustomer(customer.id)}
+                    onClick={() => setDeleteConfirm({ id: customer.id, source: customer.source, name: customer.name })}
                     className="p-2 hover:bg-rose-500/10 rounded-lg text-slate-400 hover:text-rose-400 transition-all"
                     title="Delete Customer"
                   >

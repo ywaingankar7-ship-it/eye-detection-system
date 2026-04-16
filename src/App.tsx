@@ -72,10 +72,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 // Lazy load heavy components
-const Inventory = lazy(() => import("./pages/Inventory"));
 const AIEyeTest = lazy(() => import("./pages/AIEyeTest"));
 const Analytics = lazy(() => import("./pages/Analytics"));
-const VirtualTryOn = lazy(() => import("./pages/VirtualTryOn"));
 const About = lazy(() => import("./pages/About"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Notifications = lazy(() => import("./pages/Notifications"));
@@ -237,20 +235,10 @@ export default function App() {
                 </Suspense>
               } />
             )}
-            <Route path="/inventory" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <Inventory />
-              </Suspense>
-            } />
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/ai-test" element={
               <Suspense fallback={<LoadingFallback />}>
                 <AIEyeTest />
-              </Suspense>
-            } />
-            <Route path="/try-on" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <VirtualTryOn />
               </Suspense>
             } />
             <Route path="/about" element={

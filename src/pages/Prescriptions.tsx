@@ -70,7 +70,7 @@ export default function Prescriptions() {
 
     // Customers listener
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       updateMergedCustomers(data, 'customers');
     });
     unsubscribers.push(unsubCustomers);
@@ -78,7 +78,7 @@ export default function Prescriptions() {
     // Users listener (Registered Patients)
     const qUsers = query(collection(db, "users"), where("role", "==", "patient"));
     const unsubUsers = onSnapshot(qUsers, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       updateMergedCustomers(data, 'users');
     });
     unsubscribers.push(unsubUsers);
@@ -86,7 +86,7 @@ export default function Prescriptions() {
     // Prescriptions listener
     const q = query(collection(db, "prescriptions"), orderBy("date", "desc"));
     const unsubPresc = onSnapshot(q, (snapshot) => {
-      setPrescriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setPrescriptions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "prescriptions");
