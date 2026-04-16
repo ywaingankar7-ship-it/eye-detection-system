@@ -18,6 +18,7 @@ import {
 import { Customer } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { migrateData } from "../services/migrationService";
+import { cn } from "../lib/utils";
 
 import { db } from "../firebase";
 import { 
@@ -28,7 +29,8 @@ import {
   doc, 
   serverTimestamp,
   query,
-  orderBy
+  orderBy,
+  where
 } from "firebase/firestore";
 import { handleFirestoreError, OperationType, logActivity } from "../firebaseUtils";
 
@@ -50,26 +52,64 @@ export default function Customers() {
   });
 
   useEffect(() => {
-    const q = query(collection(db, "customers"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribers: (() => void)[] = [];
+
+    // Listen to customers collection
+    const qCustomers = query(collection(db, "customers"));
+    const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
       const customerData = snapshot.docs.map(doc => ({
         id: doc.id,
+        source: 'customer',
         ...doc.data()
       }));
-      // Sort manually if needed, but this ensures all docs show up
-      customerData.sort((a: any, b: any) => {
-        const dateA = a.created_at?.seconds || 0;
-        const dateB = b.created_at?.seconds || 0;
-        return dateB - dateA;
-      });
-      setCustomers(customerData);
-      setLoading(false);
+      updateMergedList(customerData, 'customers');
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "customers");
-      setLoading(false);
     });
+    unsubscribers.push(unsubCustomers);
 
-    return () => unsubscribe();
+    // Listen to users collection (registered patients)
+    const qUsers = query(collection(db, "users"), where("role", "==", "patient"));
+    const unsubUsers = onSnapshot(qUsers, (snapshot) => {
+      const userData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        source: 'user',
+        ...doc.data()
+      }));
+      updateMergedList(userData, 'users');
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "users");
+    });
+    unsubscribers.push(unsubUsers);
+
+    let allCustomers: any[] = [];
+    let allUsers: any[] = [];
+
+    const updateMergedList = (data: any[], type: 'customers' | 'users') => {
+      if (type === 'customers') allCustomers = data;
+      else allUsers = data;
+
+      // Merge and remove duplicates by email
+      const merged = [...allCustomers];
+      allUsers.forEach(user => {
+        const exists = merged.find(c => c.email === user.email && user.email !== "");
+        if (!exists) {
+          merged.push(user);
+        }
+      });
+
+      // Sort by created_at
+      merged.sort((a: any, b: any) => {
+        const dateA = a.created_at?.seconds || (a.created_at ? new Date(a.created_at).getTime() / 1000 : 0);
+        const dateB = b.created_at?.seconds || (b.created_at ? new Date(b.created_at).getTime() / 1000 : 0);
+        return dateB - dateA;
+      });
+
+      setCustomers(merged);
+      setLoading(false);
+    };
+
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
   const handleMigration = async () => {
@@ -354,9 +394,14 @@ export default function Customers() {
                   </div>
                   <div>
                     <h3 className="font-bold text-lg">{customer.name}</h3>
-                    <p className="text-xs text-slate-500">ID: #VX{customer.id.slice(0, 4).toUpperCase()}</p>
+                    <p className="text-xs text-slate-500">ID: #VX{String(customer.id || "").slice(0, 4).toUpperCase()}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded-md text-[10px] font-bold uppercase tracking-wider">Active</span>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                        customer.source === 'user' ? "bg-purple-500/10 text-purple-400" : "bg-cyan-500/10 text-cyan-400"
+                      )}>
+                        {customer.source === 'user' ? "Registered Patient" : "Manual Record"}
+                      </span>
                     </div>
                   </div>
                 </div>

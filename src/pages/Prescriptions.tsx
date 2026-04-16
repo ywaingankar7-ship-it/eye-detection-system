@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { Prescription, Customer } from "../types";
 import { cn } from "../lib/utils";
 
@@ -24,7 +24,8 @@ import {
   addDoc, 
   serverTimestamp,
   query,
-  orderBy
+  orderBy,
+  where
 } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../firebaseUtils";
 
@@ -37,6 +38,8 @@ export default function Prescriptions() {
 
   const [formData, setFormData] = useState({
     customer_id: "",
+    manual_name: "",
+    is_manual: false,
     date: new Date().toISOString().split('T')[0],
     sph_od: "", cyl_od: "", axis_od: "",
     sph_os: "", cyl_os: "", axis_os: "",
@@ -46,11 +49,39 @@ export default function Prescriptions() {
   useEffect(() => {
     const unsubscribers: (() => void)[] = [];
 
+    let allCustomers: any[] = [];
+    let allUsers: any[] = [];
+
+    const updateMergedCustomers = (data: any[], type: 'customers' | 'users') => {
+      if (type === 'customers') allCustomers = data;
+      else allUsers = data;
+
+      const merged = [...allCustomers];
+      allUsers.forEach(user => {
+        const exists = merged.find(c => c.email === user.email && user.email !== "");
+        if (!exists) {
+          merged.push(user);
+        }
+      });
+      
+      merged.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      setCustomers(merged);
+    };
+
     // Customers listener
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      updateMergedCustomers(data, 'customers');
     });
     unsubscribers.push(unsubCustomers);
+
+    // Users listener (Registered Patients)
+    const qUsers = query(collection(db, "users"), where("role", "==", "patient"));
+    const unsubUsers = onSnapshot(qUsers, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      updateMergedCustomers(data, 'users');
+    });
+    unsubscribers.push(unsubUsers);
 
     // Prescriptions listener
     const q = query(collection(db, "prescriptions"), orderBy("date", "desc"));
@@ -67,59 +98,78 @@ export default function Prescriptions() {
   }, []);
 
   const handleExportPDF = (p: any) => {
-    const doc = new jsPDF() as any;
-    
-    // Header
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, 210, 40, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.text("AI Based Eye Power Detection - Optical Prescription", 15, 25);
-    
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    doc.text(`Patient: ${p.customer_name}`, 15, 55);
-    doc.text(`Date: ${new Date(p.date).toLocaleDateString()}`, 15, 62);
-    doc.text(`Prescription ID: #PX-${p.id.slice(0, 4).toUpperCase()}`, 15, 69);
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, 210, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.text("AI Based Eye Power Detection", 15, 20);
+      doc.setFontSize(12);
+      doc.text("Optical Prescription", 15, 30);
+      
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(12);
+      doc.text(`Patient: ${p.customer_name || 'N/A'}`, 15, 55);
+      doc.text(`Date: ${p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}`, 15, 62);
+      doc.text(`Prescription ID: #PX-${p.id ? String(p.id).slice(0, 4).toUpperCase() : 'TEMP'}`, 15, 69);
 
-    // Table
-    doc.autoTable({
-      startY: 80,
-      head: [['Eye', 'SPH', 'CYL', 'AXIS']],
-      body: [
-        ['Right (OD)', p.sph_od, p.cyl_od, p.axis_od],
-        ['Left (OS)', p.sph_os, p.cyl_os, p.axis_os]
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [6, 182, 212] }
-    });
+      // Table
+      autoTable(doc, {
+        startY: 80,
+        head: [['Eye', 'SPH', 'CYL', 'AXIS']],
+        body: [
+          ['Right (OD)', p.sph_od || '-', p.cyl_od || '-', p.axis_od || '-'],
+          ['Left (OS)', p.sph_os || '-', p.cyl_os || '-', p.axis_os || '-']
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [6, 182, 212] }
+      });
 
-    const finalY = (doc as any).lastAutoTable.finalY;
-    doc.text(`Add Power: ${p.add_power}`, 15, finalY + 15);
-    doc.text(`PD: ${p.pd} mm`, 15, finalY + 22);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Doctor's Notes:", 15, finalY + 35);
-    doc.text(p.doctor_notes || "No additional notes.", 15, finalY + 42);
+      const finalY = (doc as any).lastAutoTable.finalY || 120;
+      doc.text(`Add Power: ${p.add_power || '-'}`, 15, finalY + 15);
+      doc.text(`PD: ${p.pd || '-'} mm`, 15, finalY + 22);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Doctor's Notes:", 15, finalY + 35);
+      doc.text(p.doctor_notes || "No additional notes.", 15, finalY + 42);
 
-    doc.save(`Prescription_${p.customer_name}_${p.date}.pdf`);
+      doc.save(`Prescription_${p.customer_name || 'Patient'}_${p.date || 'Date'}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const customer = customers.find(c => c.id === formData.customer_id);
+      let customer_name = "Unknown";
+      let customer_email = "";
+
+      if (formData.is_manual) {
+        customer_name = formData.manual_name;
+      } else {
+        const customer = customers.find(c => c.id === formData.customer_id);
+        customer_name = customer?.name || "Unknown";
+        customer_email = customer?.email || "";
+      }
+
       await addDoc(collection(db, "prescriptions"), {
         ...formData,
-        customer_name: customer?.name || "Unknown",
-        customer_email: customer?.email || "",
+        customer_name,
+        customer_email,
         created_at: serverTimestamp()
       });
       setIsAdding(false);
       setFormData({
         customer_id: "",
+        manual_name: "",
+        is_manual: false,
         date: new Date().toISOString().split('T')[0],
         sph_od: "", cyl_od: "", axis_od: "",
         sph_os: "", cyl_os: "", axis_os: "",
@@ -173,16 +223,36 @@ export default function Prescriptions() {
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400">Select Patient</label>
-                  <select
-                    required
-                    value={formData.customer_id}
-                    onChange={(e) => setFormData({...formData, customer_id: e.target.value})}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none"
-                  >
-                    <option value="">Choose a patient...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-slate-400">Patient Name</label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, is_manual: !formData.is_manual, customer_id: "", manual_name: ""})}
+                      className="text-xs font-bold text-cyan-400 uppercase tracking-widest hover:text-cyan-300 transition-colors"
+                    >
+                      {formData.is_manual ? "Select Existing" : "Enter Manually"}
+                    </button>
+                  </div>
+                  {formData.is_manual ? (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter patient name..."
+                      value={formData.manual_name}
+                      onChange={(e) => setFormData({...formData, manual_name: e.target.value})}
+                      className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    />
+                  ) : (
+                    <select
+                      required
+                      value={formData.customer_id}
+                      onChange={(e) => setFormData({...formData, customer_id: e.target.value})}
+                      className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    >
+                      <option value="">Choose a patient...</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400">Date</label>
