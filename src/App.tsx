@@ -126,6 +126,17 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    // Check network connectivity
+    const checkConnectivity = async () => {
+      try {
+        await fetch("https://www.google.com/favicon.ico", { mode: 'no-cors' });
+        console.log("Network reachable");
+      } catch (e) {
+        console.warn("Network unreachable or blocked:", e);
+      }
+    };
+    checkConnectivity();
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("Auth state changed:", firebaseUser?.email);
       if (firebaseUser) {

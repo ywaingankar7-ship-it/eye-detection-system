@@ -151,12 +151,17 @@ export default function Customers() {
     
     try {
       const collectionName = source === 'user' ? "users" : "customers";
-      // Ensure ID is a string to prevent Firebase SDK errors
-      await deleteDoc(doc(db, collectionName, String(id)));
+      const docId = String(id);
+      
+      console.log(`Deleting ${collectionName}/${docId}...`);
+      
+      const docRef = doc(db, collectionName, docId);
+      await deleteDoc(docRef);
+      
       await logActivity("Delete Customer", `Deleted ${source} record: ${deleteConfirm.name} (ID: ${id})`);
       setDeleteConfirm(null);
-    } catch (err) {
-      console.error("Failed to delete customer:", err);
+    } catch (err: any) {
+      console.error("Delete operation failed:", err);
       handleFirestoreError(err, OperationType.DELETE, `${source === 'user' ? 'users' : 'customers'}/${id}`);
     }
   };

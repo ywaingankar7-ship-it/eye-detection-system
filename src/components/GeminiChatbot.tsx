@@ -68,19 +68,19 @@ export default function GeminiChatbot() {
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/50">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-[var(--bg-primary)]/50">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`flex gap-2 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      msg.role === "user" ? "bg-cyan-500" : "bg-slate-800 border border-white/10"
+                      msg.role === "user" ? "bg-cyan-500" : "bg-[var(--glass-bg)] border border-[var(--glass-border)]"
                     }`}>
                       {msg.role === "user" ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-cyan-400" />}
                     </div>
                     <div className={`p-3 rounded-2xl text-sm ${
                       msg.role === "user" 
                         ? "bg-cyan-500 text-white rounded-tr-none" 
-                        : "bg-white/5 text-slate-200 border border-white/10 rounded-tl-none"
+                        : "bg-[var(--glass-bg)] text-[var(--text-primary)] border border-[var(--glass-border)] rounded-tl-none"
                     }`}>
                       {msg.text}
                     </div>
@@ -89,16 +89,16 @@ export default function GeminiChatbot() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="flex gap-2 items-center bg-white/5 p-3 rounded-2xl rounded-tl-none border border-white/10">
+                  <div className="flex gap-2 items-center bg-[var(--glass-bg)] p-3 rounded-2xl rounded-tl-none border border-[var(--glass-border)]">
                     <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
-                    <span className="text-xs text-slate-400 font-medium">Thinking...</span>
+                    <span className="text-xs text-[var(--text-secondary)] font-medium">Thinking...</span>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-white/10 bg-slate-900">
+            <div className="p-4 border-t border-[var(--glass-border)] bg-[var(--bg-primary)]">
               <div className="relative">
                 <input
                   type="text"
@@ -106,7 +106,7 @@ export default function GeminiChatbot() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                   placeholder="Ask me anything..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                  className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-[var(--text-primary)]"
                 />
                 <button
                   onClick={handleSend}

@@ -273,7 +273,9 @@ export default function AIEyeTest() {
     setEyeType(null);
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY || (process.env as any).API_KEY;
+      // Use process.env.GEMINI_API_KEY if available (mapped by Vite)
+      // Otherwise fallback gracefully
+      const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) return;
 
       const ai = new GoogleGenAI({ apiKey });
@@ -370,7 +372,7 @@ export default function AIEyeTest() {
     setFaceShapeResult(null);
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY || (process.env as any).API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         throw new Error("Gemini API Key not found.");
       }
@@ -545,10 +547,34 @@ export default function AIEyeTest() {
     }
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!result) return;
-    const doc = new jsPDF() as any;
-    // ... (rest of PDF logic remains same)
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF() as any;
+      
+      // Basic PDF Generation
+      doc.setFontSize(22);
+      doc.text("Eye Health & Diagnosis Report", 20, 30);
+      
+      doc.setFontSize(12);
+      doc.text(`Patient ID: ${result.customer_id}`, 20, 45);
+      doc.text(`Test Date: ${new Date().toLocaleDateString()}`, 20, 52);
+      
+      doc.line(20, 60, 190, 60);
+      
+      doc.setFontSize(16);
+      doc.text("Overall Results", 20, 75);
+      doc.text(`Score: ${overallScore}/100`, 150, 75);
+      
+      doc.setFontSize(12);
+      doc.text("Notes:", 20, 90);
+      doc.text(result.notes || "No additional notes provided.", 20, 100);
+      
+      doc.save(`EyeReport-${result.customer_id}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+    }
   };
 
   const getHealthData = () => {
@@ -792,7 +818,7 @@ export default function AIEyeTest() {
                     {/* Quick Scan Badge */}
                     <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
                       {isQuickScanning ? (
-                        <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-xl">
+                        <div className="bg-[var(--glass-bg)] backdrop-blur-md border border-[var(--glass-border)] px-3 py-1.5 rounded-full flex items-center gap-2 shadow-xl">
                           <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />
                           <span className="text-[10px] font-bold text-white uppercase tracking-widest">Quick Scanning...</span>
                         </div>

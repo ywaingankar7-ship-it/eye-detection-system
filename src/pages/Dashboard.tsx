@@ -38,7 +38,9 @@ import {
   limit,
   getDocs,
   getCountFromServer,
-  where
+  where,
+  getDoc,
+  doc
 } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../firebaseUtils";
 
