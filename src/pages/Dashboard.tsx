@@ -42,6 +42,8 @@ import {
 } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../firebaseUtils";
 
+import { ADMIN_EMAILS, isEmailAdmin } from "../constants";
+
 export default function Dashboard() {
   const [stats, setStats] = useState<any>({
     totalCustomers: 0,
@@ -57,83 +59,115 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const savedUserStr = localStorage.getItem("eyepower_user");
-    const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+    let unsubLogs: (() => void) | null = null;
     
-    if (savedUser) {
-      setUser(savedUser);
-    }
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Cleanup previous listeners
+      if (unsubLogs) {
+        unsubLogs();
+        unsubLogs = null;
+      }
 
-    // Wait for auth to be fully initialized
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (!firebaseUser && !savedUser) {
-        navigate("/login");
+      if (!firebaseUser) {
+        const savedUserStr = localStorage.getItem("eyepower_user");
+        if (!savedUserStr) {
+          navigate("/login");
+        }
         return;
       }
 
-      if (!firebaseUser) return;
-
-      // Real-time stats from Firestore
-      const unsubscribers: (() => void)[] = [];
-
-      // Simple count listeners
-      const fetchStats = async () => {
-        try {
-          const isStaff = savedUser.role === 'admin' || savedUser.role === 'staff';
-          
-          const statsPromises: any = {
-            aiTests: getCountFromServer(collection(db, "eye_tests")),
-            appointmentsToday: getCountFromServer(query(collection(db, "appointments"), where("date", "==", new Date().toISOString().split('T')[0]))),
+      // Get fresh profile data
+      let currentUser = user;
+      try {
+        const profileSnap = await getDoc(doc(db, "users", firebaseUser.uid));
+        if (profileSnap.exists()) {
+          currentUser = { ...profileSnap.data(), id: profileSnap.id };
+          setUser(currentUser);
+          localStorage.setItem("eyepower_user", JSON.stringify(currentUser));
+        } else {
+          // Fallback if doc doesn't exist yet
+          const email = firebaseUser.email || "";
+          const isAdmin = isEmailAdmin(email);
+          currentUser = { 
+            uid: firebaseUser.uid, 
+            name: firebaseUser.displayName || email.split('@')[0], 
+            email, 
+            role: isAdmin ? 'admin' : 'patient' 
           };
-
-          if (isStaff) {
-            statsPromises.totalCustomers = getCountFromServer(collection(db, "customers"));
-          }
-
-          const results = await Promise.all(Object.entries(statsPromises).map(async ([key, promise]: [string, any]) => {
-            try {
-              const snap = await promise;
-              return [key, snap.data().count];
-            } catch (err) {
-              console.warn(`Permission or fetch error for ${key} count:`, err);
-              return [key, 0];
-            }
-          }));
-
-          const newStats = Object.fromEntries(results);
-          setStats((prev: any) => ({ ...prev, ...newStats }));
-        } catch (err) {
-          console.error("Error fetching stats:", err);
+          setUser(currentUser);
         }
+      } catch (err) {
+        console.warn("Failed to fetch fresh user profile:", err);
+        const savedUserStr = localStorage.getItem("eyepower_user");
+        if (savedUserStr) currentUser = JSON.parse(savedUserStr);
+      }
+
+      if (!currentUser) return;
+
+      const isStaff = currentUser.role === 'admin' || currentUser.role === 'staff' || isEmailAdmin(currentUser.email);
+      
+      // Fetch counts
+      const fetchStats = async () => {
+        let aiTestsQuery: any = collection(db, "eye_tests");
+        let apptsQuery: any = collection(db, "appointments");
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        if (!isStaff) {
+          // Patients can only count their own records
+          aiTestsQuery = query(collection(db, "eye_tests"), where("customer_id", "==", firebaseUser.uid));
+          apptsQuery = query(collection(db, "appointments"), where("customer_id", "==", firebaseUser.uid), where("date", "==", todayStr));
+        } else {
+          apptsQuery = query(collection(db, "appointments"), where("date", "==", todayStr));
+        }
+
+        const statsPromises: any = {
+          aiTests: getCountFromServer(aiTestsQuery),
+          appointmentsToday: getCountFromServer(apptsQuery),
+        };
+
+        if (isStaff) {
+          statsPromises.totalCustomers = getCountFromServer(collection(db, "customers"));
+        }
+
+        const results = await Promise.all(Object.entries(statsPromises).map(async ([key, promise]: [string, any]) => {
+          try {
+            const snap = await promise;
+            return [key, snap.data().count];
+          } catch (err) {
+            console.warn(`Permission or fetch error for ${key} count:`, err);
+            return [key, 0];
+          }
+        }));
+
+        setStats(Object.fromEntries(results));
+        setLoading(false);
       };
 
       fetchStats();
 
-      // Activities listener - only for staff
-      if (savedUser.role === 'admin' || savedUser.role === 'staff') {
+      // Activities listener for staff
+      if (isStaff) {
         const activitiesQuery = query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(10));
-        const unsubActivities = onSnapshot(activitiesQuery, (snapshot) => {
+        unsubLogs = onSnapshot(activitiesQuery, (snapshot) => {
           const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setActivities(logs);
-          setLoading(false);
         }, (err) => {
           if (err.message.includes("permissions")) {
-            console.warn("User does not have permission to view activity logs.");
+            console.warn("Permission denied for activities listener");
             setActivities([]);
           } else {
-            handleFirestoreError(err, OperationType.GET, "activity_logs");
+            console.error("Activities listener error:", err);
           }
-          setLoading(false);
         });
-        unsubscribers.push(unsubActivities);
       } else {
-        setLoading(false);
+        setActivities([]);
       }
-
-      return () => unsubscribers.forEach(unsub => unsub());
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubLogs) unsubLogs();
+    };
   }, [navigate]);
 
   if (loading || !user) return <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
@@ -394,8 +428,9 @@ export default function Dashboard() {
                 <XAxis dataKey="day" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }}
+                  contentStyle={{ backgroundColor: "var(--bg-primary)", border: "1px solid var(--glass-border)", borderRadius: "12px", color: "var(--text-primary)" }}
                   itemStyle={{ color: "#22d3ee" }}
+                  labelStyle={{ color: "var(--text-secondary)" }}
                 />
                 <Area type="monotone" dataKey="tests" stroke="#22d3ee" strokeWidth={3} fillOpacity={1} fill="url(#colorTests)" />
                 <Area type="monotone" dataKey="registrations" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorRegs)" />
@@ -438,7 +473,7 @@ export default function Dashboard() {
                   {activity.user_name?.charAt(0) || "U"}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-[var(--text-primary)]">{activity.user_name} <span className="text-slate-400 font-normal">{activity.action}</span></p>
+                  <p className="text-sm font-bold text-[var(--text-primary)]">{activity.user_name} <span className="text-[var(--text-secondary)] font-normal">{activity.action}</span></p>
                   <p className="text-xs text-slate-500">{activity.details}</p>
                 </div>
               </div>

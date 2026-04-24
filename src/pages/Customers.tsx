@@ -187,7 +187,7 @@ export default function Customers() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Customer Directory</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--text-primary)]">Customer Directory</h1>
           <p className="text-slate-400 mt-1">Manage patient records, eye test history, and contact details.</p>
         </div>
         <div className="flex gap-3">
@@ -278,7 +278,7 @@ export default function Customers() {
                     type="text" 
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -288,7 +288,7 @@ export default function Customers() {
                       type="number" 
                       value={newCustomer.age}
                       onChange={(e) => setNewCustomer({ ...newCustomer, age: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                     />
                   </div>
                   <div className="space-y-2">
@@ -296,7 +296,7 @@ export default function Customers() {
                     <select 
                       value={newCustomer.gender}
                       onChange={(e) => setNewCustomer({ ...newCustomer, gender: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                     >
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
@@ -311,7 +311,7 @@ export default function Customers() {
                       type="tel" 
                       value={newCustomer.phone}
                       onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                     />
                   </div>
                   <div className="space-y-2">
@@ -320,7 +320,7 @@ export default function Customers() {
                       type="email" 
                       value={newCustomer.email}
                       onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                     />
                   </div>
                 </div>
@@ -329,7 +329,7 @@ export default function Customers() {
                   <textarea 
                     value={newCustomer.address}
                     onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none h-20 resize-none"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none h-20 resize-none"
                   />
                 </div>
                 <div className="flex gap-3 pt-4">
@@ -399,7 +399,7 @@ export default function Customers() {
       </AnimatePresence>
 
       <div className="glass-card">
-        <div className="p-6 border-b border-white/10">
+        <div className="p-6 border-b border-[var(--glass-border)]">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
@@ -407,7 +407,7 @@ export default function Customers() {
               placeholder="Search by name, email or phone..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
         </div>
@@ -424,7 +424,7 @@ export default function Customers() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.05 }}
-                className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group relative overflow-hidden"
+                className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl p-6 hover:bg-[var(--card-hover)] transition-all group relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                   <button 
@@ -472,17 +472,17 @@ export default function Customers() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-white/5 flex gap-2">
+                <div className="mt-6 pt-6 border-t border-[var(--glass-border)] flex gap-2">
                   <button 
                     onClick={() => navigate(`/ai-test?customerId=${customer.id}`)}
-                    className="flex-1 py-2 bg-white/5 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    className="flex-1 py-2 bg-[var(--bg-primary)] hover:bg-cyan-500/10 hover:text-cyan-400 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border border-[var(--glass-border)]"
                   >
                     <History className="w-4 h-4" />
                     Test History
                   </button>
                   <button 
                     onClick={() => alert(`Profile for ${customer.name}`)}
-                    className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all"
+                    className="px-4 py-2 bg-[var(--bg-primary)] hover:bg-[var(--card-hover)] rounded-xl text-xs font-bold transition-all border border-[var(--glass-border)]"
                   >
                     Profile
                   </button>

@@ -199,7 +199,7 @@ export default function Prescriptions() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Digital Prescriptions</h1>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">Digital Prescriptions</h1>
           <p className="text-slate-500">Manage and export clinical-grade optical prescriptions.</p>
         </div>
         <button 
@@ -218,7 +218,7 @@ export default function Prescriptions() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="glass-card p-8 border-white/5"
+            className="glass-card p-8 border-[var(--glass-border)]"
           >
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="grid md:grid-cols-2 gap-6">
@@ -240,14 +240,14 @@ export default function Prescriptions() {
                       placeholder="Enter patient name..."
                       value={formData.manual_name}
                       onChange={(e) => setFormData({...formData, manual_name: e.target.value})}
-                      className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                      className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                     />
                   ) : (
                     <select
                       required
                       value={formData.customer_id}
                       onChange={(e) => setFormData({...formData, customer_id: e.target.value})}
-                      className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                      className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                     >
                       <option value="">Choose a patient...</option>
                       {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -261,7 +261,7 @@ export default function Prescriptions() {
                     required
                     value={formData.date}
                     onChange={(e) => setFormData({...formData, date: e.target.value})}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-[var(--text-primary)] focus:ring-2 focus:ring-cyan-500/50 outline-none"
                   />
                 </div>
               </div>
@@ -276,15 +276,15 @@ export default function Prescriptions() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <label className="text-xs text-slate-500">SPH</label>
-                      <input type="text" placeholder="-1.25" value={formData.sph_od} onChange={(e) => setFormData({...formData, sph_od: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm" />
+                      <input type="text" placeholder="-1.25" value={formData.sph_od} onChange={(e) => setFormData({...formData, sph_od: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-lg py-2 px-3 text-[var(--text-primary)] text-sm" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs text-slate-500">CYL</label>
-                      <input type="text" placeholder="-0.50" value={formData.cyl_od} onChange={(e) => setFormData({...formData, cyl_od: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm" />
+                      <input type="text" placeholder="-0.50" value={formData.cyl_od} onChange={(e) => setFormData({...formData, cyl_od: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-lg py-2 px-3 text-[var(--text-primary)] text-sm" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs text-slate-500">AXIS</label>
-                      <input type="text" placeholder="180" value={formData.axis_od} onChange={(e) => setFormData({...formData, axis_od: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm" />
+                      <input type="text" placeholder="180" value={formData.axis_od} onChange={(e) => setFormData({...formData, axis_od: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-lg py-2 px-3 text-[var(--text-primary)] text-sm" />
                     </div>
                   </div>
                 </div>
@@ -298,15 +298,15 @@ export default function Prescriptions() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <label className="text-xs text-slate-500">SPH</label>
-                      <input type="text" placeholder="-1.50" value={formData.sph_os} onChange={(e) => setFormData({...formData, sph_os: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm" />
+                      <input type="text" placeholder="-1.50" value={formData.sph_os} onChange={(e) => setFormData({...formData, sph_os: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-lg py-2 px-3 text-[var(--text-primary)] text-sm" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs text-slate-500">CYL</label>
-                      <input type="text" placeholder="-0.25" value={formData.cyl_os} onChange={(e) => setFormData({...formData, cyl_os: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm" />
+                      <input type="text" placeholder="-0.25" value={formData.cyl_os} onChange={(e) => setFormData({...formData, cyl_os: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-lg py-2 px-3 text-[var(--text-primary)] text-sm" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs text-slate-500">AXIS</label>
-                      <input type="text" placeholder="175" value={formData.axis_os} onChange={(e) => setFormData({...formData, axis_os: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm" />
+                      <input type="text" placeholder="175" value={formData.axis_os} onChange={(e) => setFormData({...formData, axis_os: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-lg py-2 px-3 text-[var(--text-primary)] text-sm" />
                     </div>
                   </div>
                 </div>
@@ -315,11 +315,11 @@ export default function Prescriptions() {
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400">Add Power</label>
-                  <input type="text" placeholder="+2.00" value={formData.add_power} onChange={(e) => setFormData({...formData, add_power: e.target.value})} className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                  <input type="text" placeholder="+2.00" value={formData.add_power} onChange={(e) => setFormData({...formData, add_power: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-cyan-500/50" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400">PD (Pupillary Distance)</label>
-                  <input type="text" placeholder="63" value={formData.pd} onChange={(e) => setFormData({...formData, pd: e.target.value})} className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                  <input type="text" placeholder="63" value={formData.pd} onChange={(e) => setFormData({...formData, pd: e.target.value})} className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-cyan-500/50" />
                 </div>
               </div>
 
@@ -329,7 +329,7 @@ export default function Prescriptions() {
                   rows={4}
                   value={formData.doctor_notes}
                   onChange={(e) => setFormData({...formData, doctor_notes: e.target.value})}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none"
                   placeholder="Additional instructions for the patient or lab..."
                 ></textarea>
               </div>
@@ -338,7 +338,7 @@ export default function Prescriptions() {
                 <button
                   type="button"
                   onClick={() => setIsAdding(false)}
-                  className="px-8 py-3 rounded-xl border border-white/10 text-slate-400 font-bold hover:bg-white/5 transition-all"
+                  className="px-8 py-3 rounded-xl border border-[var(--glass-border)] text-slate-400 font-bold hover:bg-[var(--card-hover)] transition-all"
                 >
                   Cancel
                 </button>
@@ -360,7 +360,7 @@ export default function Prescriptions() {
             animate={{ opacity: 1 }}
             className="space-y-6"
           >
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[var(--glass-bg)] p-4 rounded-2xl border border-[var(--glass-border)]">
               <div className="relative w-full md:w-96">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
@@ -368,7 +368,7 @@ export default function Prescriptions() {
                   placeholder="Search by patient name..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--glass-border)] rounded-xl py-2.5 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
                 />
               </div>
               <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">
@@ -383,15 +383,15 @@ export default function Prescriptions() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="glass-card p-6 border-white/5 hover:border-white/20 transition-all group"
+                  className="glass-card p-6 border-[var(--glass-border)] hover:border-cyan-500/50 transition-all group"
                 >
                   <div className="flex items-start justify-between mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-12 h-12 rounded-xl bg-[var(--bg-primary)] border border-[var(--glass-border)] flex items-center justify-center group-hover:scale-110 transition-transform">
                         <User className="w-6 h-6 text-slate-400 group-hover:text-cyan-400 transition-colors" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-white truncate">{p.customer_name}</h3>
+                        <h3 className="text-lg font-bold text-[var(--text-primary)] truncate">{p.customer_name}</h3>
                         <div className="flex items-center gap-2 text-slate-500 text-xs mt-1">
                           <CalendarIcon className="w-3 h-3" />
                           {new Date(p.date).toLocaleDateString()}
@@ -407,17 +407,17 @@ export default function Prescriptions() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                    <div className="p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">OD (Right)</p>
-                      <p className="text-sm font-bold text-white">{p.sph_od} / {p.cyl_od} x {p.axis_od}°</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)]">{p.sph_od} / {p.cyl_od} x {p.axis_od}°</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                    <div className="p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">OS (Left)</p>
-                      <p className="text-sm font-bold text-white">{p.sph_os} / {p.cyl_os} x {p.axis_os}°</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)]">{p.sph_os} / {p.cyl_os} x {p.axis_os}°</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between pt-4 border-t border-[var(--glass-border)]">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-slate-500 uppercase">PD: {p.pd}mm</span>
                     </div>

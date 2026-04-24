@@ -40,19 +40,21 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        (
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          (request.auth.token.email.lower() in ["harshyadav856258@gmail.com", "admin@eyepower.ai", "admin@visionx.com"])
-        );
+      return isAuthenticated() && (
+        (request.auth.token.email.lower() in ["harshyadav856258@gmail.com", "admin@eyepower.ai", "admin@visionx.com"]) ||
+        (request.auth.token.get('email', '').lower() in ["harshyadav856258@gmail.com", "admin@eyepower.ai", "admin@visionx.com"]) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     function isStaff() {
-      return isAuthenticated() && 
-        (
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff' || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')) ||
-          isAdmin()
-        );
+      return isAuthenticated() && (
+        isAdmin() ||
+        (request.auth.token.get('email', '').lower() in ["harshyadav856258@gmail.com", "admin@eyepower.ai", "admin@visionx.com"]) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff'])
+      );
     }
 
     function isOwner(userId) {

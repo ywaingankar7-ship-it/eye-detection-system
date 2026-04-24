@@ -187,7 +187,7 @@ export default function Appointments() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Appointment Scheduler</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--text-primary)]">Appointment Scheduler</h1>
           <p className="text-slate-400 mt-1">Manage patient visits, eye exams, and consultations.</p>
         </div>
         {(user?.role === 'admin' || user?.role === 'staff' || user?.role === 'patient') && (
@@ -247,7 +247,7 @@ export default function Appointments() {
                     required
                     value={newAppt.customer_id}
                     onChange={(e) => setNewAppt({ ...newAppt, customer_id: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                   >
                     <option value="">-- Select --</option>
                     {customers.length === 0 ? (
@@ -270,7 +270,7 @@ export default function Appointments() {
                       required
                       value={newAppt.date}
                       onChange={(e) => setNewAppt({ ...newAppt, date: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                     />
                   </div>
                   <div className="space-y-2">
@@ -281,7 +281,7 @@ export default function Appointments() {
                       placeholder="e.g. 10:00 AM"
                       value={newAppt.time}
                       onChange={(e) => setNewAppt({ ...newAppt, time: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                      className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                     />
                   </div>
                 </div>
@@ -290,7 +290,7 @@ export default function Appointments() {
                   <textarea 
                     value={newAppt.notes}
                     onChange={(e) => setNewAppt({ ...newAppt, notes: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-24"
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-24"
                     placeholder="Reason for visit..."
                   />
                 </div>
@@ -298,7 +298,7 @@ export default function Appointments() {
                   <button 
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition-all"
+                    className="flex-1 py-3 bg-[var(--bg-primary)] hover:bg-[var(--card-hover)] text-[var(--text-primary)] border border-[var(--glass-border)] rounded-xl font-bold transition-all"
                   >
                     Cancel
                   </button>
@@ -353,7 +353,7 @@ export default function Appointments() {
                   key={s}
                   onClick={() => setFilter(s)}
                   className={`w-full text-left px-4 py-2 rounded-xl text-sm capitalize transition-all ${
-                    filter === s ? 'bg-white/10 text-cyan-400 font-bold' : 'text-slate-400 hover:bg-white/5'
+                    filter === s ? 'bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30' : 'text-slate-400 hover:bg-[var(--card-hover)]'
                   }`}
                 >
                   {s}
@@ -370,7 +370,7 @@ export default function Appointments() {
                 key={tab} 
                 onClick={() => setActiveTab(tab)}
                 className={`px-6 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                  activeTab === tab ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  activeTab === tab ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-[var(--glass-bg)] text-slate-400 hover:bg-[var(--card-hover)] border border-[var(--glass-border)]'
                 }`}
               >
                 {tab}
@@ -381,7 +381,7 @@ export default function Appointments() {
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
               {loading ? (
-                [1,2,3].map(i => <div key={i} className="h-24 bg-white/5 rounded-2xl animate-pulse"></div>)
+                [1,2,3].map(i => <div key={i} className="h-24 bg-[var(--glass-bg)] rounded-2xl animate-pulse"></div>)
               ) : filteredAppointments.length > 0 ? (
                 filteredAppointments.map((app, i) => (
                   <motion.div
@@ -421,7 +421,7 @@ export default function Appointments() {
                     <div className="flex items-center gap-2">
                       {/* Admin can only view, no action buttons as per request */}
                       {user?.role === 'admin' && (
-                        <span className="text-[10px] text-slate-500 uppercase font-bold px-2 py-1 bg-white/5 rounded-lg">View Only</span>
+                        <span className="text-[10px] bg-[var(--bg-primary)] text-slate-500 uppercase font-bold px-2 py-1 rounded-lg border border-[var(--glass-border)]">View Only</span>
                       )}
                       
                       {app.status === 'completed' && (
